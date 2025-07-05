@@ -86,53 +86,155 @@ def create_pipeline():
             return False
     return True
 
+
+
+def get_score_color(score: Any) -> str:
+    """
+    Get color for score display based on score value
+    
+    Args:
+        score: The score value
+        
+    Returns:
+        CSS color string
+    """
+    if score == "N/A":
+        return "gray"
+    
+    try:
+        numeric_score = float(score)
+        if numeric_score >= 4:
+            return "green"
+        elif numeric_score >= 3:
+            return "orange"
+        else:
+            return "red"
+    except (ValueError, TypeError):
+        return "gray"
+
+def display_score_metric(title: str, emoji: str, metric_data: Any, metric_name: str = None):
+    """
+    Display a single score metric with consistent formatting
+    
+    Args:
+        title: The title for the metric
+        emoji: The emoji to display
+        metric_data: The metric data (dict or direct value)
+        metric_name: The name of the metric (e.g., "relevance", "groundedness")
+    """
+    st.subheader(f"{emoji} {title}")
+    
+    if isinstance(metric_data, dict) and metric_name:
+        # Handle nested structure: metric_data[metric_name] contains the evaluation results
+        metric_results = metric_data.get(metric_name, {})
+        
+        score = "N/A"
+        reason = "No reason provided"
+        
+        # Extract score from nested structure
+        if isinstance(metric_results, dict):
+            # Try different score key formats within the nested results
+            possible_score_keys = [
+                metric_name,                    # "relevance", "groundedness"
+                f"gpt_{metric_name}",          # "gpt_relevance", "gpt_groundedness"
+                "score",                       # generic "score"
+            ]
+            
+            for key in possible_score_keys:
+                if key in metric_results:
+                    score = metric_results[key]
+                    break
+            
+            # Extract reason from nested structure
+            possible_reason_keys = [
+                f"{metric_name}_reason",       # "relevance_reason", "groundedness_reason"
+                "reason",                      # generic "reason"
+            ]
+            
+            for key in possible_reason_keys:
+                if key in metric_results:
+                    reason = metric_results[key]
+                    break
+        
+
+        # Ensure score is numeric and convert to float
+        if score != "N/A":
+            try:
+                score = float(score)
+            except (ValueError, TypeError):
+                score = "N/A"
+        
+        # Display score with color coding
+        score_color = get_score_color(score)
+        if score != "N/A":
+            st.markdown(f"<h2 style='color: {score_color};'>{score}/5</h2>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<h2 style='color: {score_color};'>{score}</h2>", unsafe_allow_html=True)
+        
+        st.write("**Reasoning:**")
+        st.write(reason)
+    else:
+        st.write("**Note:** Unable to display metric - invalid format")
+
+def extract_scores_from_result(result: Dict[str, Any]) -> tuple:
+    """
+    Extract relevance and groundedness scores from a result
+    
+    Args:
+        result: The evaluation result
+        
+    Returns:
+        Tuple of (relevance_score, groundedness_score)
+    """
+    if "error" in result or "evaluation" not in result:
+        return 0, 0
+    
+    eval_data = result["evaluation"]
+    
+    # Extract from nested structure
+    rel_data = eval_data.get("relevance", {})
+    ground_data = eval_data.get("groundedness", {})
+    
+    # Extract scores from nested dictionaries
+    rel_score = 0
+    ground_score = 0
+    
+    if isinstance(rel_data, dict):
+        rel_score = rel_data.get("relevance", 0)
+    
+    if isinstance(ground_data, dict):
+        ground_score = ground_data.get("groundedness", 0)
+    
+    # Convert to numeric, default to 0 if not convertible
+    try:
+        rel_score = float(rel_score) if rel_score is not None else 0
+    except (ValueError, TypeError):
+        rel_score = 0
+        
+    try:
+        ground_score = float(ground_score) if ground_score is not None else 0
+    except (ValueError, TypeError):
+        ground_score = 0
+    
+    return rel_score, ground_score
+
 def display_evaluation_metrics(result: Dict[str, Any]):
     """Display evaluation metrics in a formatted way"""
     if "evaluation" not in result:
+        st.warning("⚠️ No evaluation data found in result")
         return
     
     evaluation = result["evaluation"]
     
+
     # Create columns for metrics
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("🎯 Relevance Score")
-        relevance = evaluation.get("relevance", {})
-        if isinstance(relevance, dict):
-            score = relevance.get("score", "N/A")
-            reason = relevance.get("reason", "No reason provided")
-            
-            # Display score with color coding
-            if score != "N/A":
-                score_color = "green" if score >= 4 else "orange" if score >= 3 else "red"
-                st.markdown(f"<h2 style='color: {score_color};'>{score}/5</h2>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"<h2 style='color: gray;'>{score}</h2>", unsafe_allow_html=True)
-            
-            st.write("**Reasoning:**")
-            st.write(reason)
-        else:
-            st.write(relevance)
+        display_score_metric("Relevance Score", "🎯", evaluation, "relevance")
     
     with col2:
-        st.subheader("📚 Groundedness Score")
-        groundedness = evaluation.get("groundedness", {})
-        if isinstance(groundedness, dict):
-            score = groundedness.get("score", "N/A")
-            reason = groundedness.get("reason", "No reason provided")
-            
-            # Display score with color coding
-            if score != "N/A":
-                score_color = "green" if score >= 4 else "orange" if score >= 3 else "red"
-                st.markdown(f"<h2 style='color: {score_color};'>{score}/5</h2>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"<h2 style='color: gray;'>{score}</h2>", unsafe_allow_html=True)
-            
-            st.write("**Reasoning:**")
-            st.write(reason)
-        else:
-            st.write(groundedness)
+        display_score_metric("Groundedness Score", "📚", evaluation, "groundedness")
 
 def display_single_result(result: Dict[str, Any], index: int = 0):
     """Display a single evaluation result"""
@@ -175,26 +277,10 @@ def create_summary_chart(results: List[Dict[str, Any]]):
     questions = []
     
     for i, result in enumerate(results):
-        if "error" not in result and "evaluation" in result:
-            eval_data = result["evaluation"]
-            
-            # Get relevance score
-            relevance = eval_data.get("relevance", {})
-            if isinstance(relevance, dict):
-                rel_score = relevance.get("score", 0)
-            else:
-                rel_score = 0
-            
-            # Get groundedness score
-            groundedness = eval_data.get("groundedness", {})
-            if isinstance(groundedness, dict):
-                ground_score = groundedness.get("score", 0)
-            else:
-                ground_score = 0
-            
-            relevance_scores.append(rel_score)
-            groundedness_scores.append(ground_score)
-            questions.append(f"Q{i+1}")
+        rel_score, ground_score = extract_scores_from_result(result)
+        relevance_scores.append(rel_score)
+        groundedness_scores.append(ground_score)
+        questions.append(f"Q{i+1}")
     
     if relevance_scores and groundedness_scores:
         # Create a grouped bar chart
@@ -270,9 +356,8 @@ def main():
                         # Store result
                         st.session_state.evaluation_results = [result]
                         
-                        # Display result
+                        # Success message only - results will be displayed in the results section
                         st.success("✅ Evaluation completed!")
-                        display_single_result(result)
                         
                     except Exception as e:
                         st.error(f"❌ Error during evaluation: {str(e)}")
@@ -397,12 +482,18 @@ def main():
                     if "error" not in result:
                         eval_data = result.get("evaluation", {})
                         
-                        # Extract scores
-                        relevance = eval_data.get("relevance", {})
-                        groundedness = eval_data.get("groundedness", {})
+                        # Extract from nested structure
+                        rel_data = eval_data.get("relevance", {})
+                        ground_data = eval_data.get("groundedness", {})
                         
-                        rel_score = relevance.get("score", "N/A") if isinstance(relevance, dict) else relevance
-                        ground_score = groundedness.get("score", "N/A") if isinstance(groundedness, dict) else groundedness
+                        rel_score = "N/A"
+                        ground_score = "N/A"
+                        
+                        if isinstance(rel_data, dict):
+                            rel_score = rel_data.get("relevance", "N/A")
+                        
+                        if isinstance(ground_data, dict):
+                            ground_score = ground_data.get("groundedness", "N/A")
                         
                         csv_data.append({
                             "Question": result["question"],
