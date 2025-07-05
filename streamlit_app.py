@@ -16,7 +16,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
-import io
 import uuid
 from typing import Dict, Any, List
 
@@ -459,63 +458,6 @@ def main():
         st.subheader("🔍 Detailed Results")
         for i, result in enumerate(st.session_state.evaluation_results):
             display_single_result(result, i)
-        
-        # Download results
-        st.subheader("💾 Download Results")
-        
-        # Prepare data for download
-        results_json = json.dumps(st.session_state.evaluation_results, indent=2, default=str)
-        
-        # Create download button
-        st.download_button(
-            label="📥 Download Results as JSON",
-            data=results_json,
-            file_name=f"rag_evaluation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json"
-        )
-        
-        # Create CSV for batch results
-        if len(st.session_state.evaluation_results) > 1:
-            try:
-                csv_data = []
-                for result in st.session_state.evaluation_results:
-                    if "error" not in result:
-                        eval_data = result.get("evaluation", {})
-                        
-                        # Extract from nested structure
-                        rel_data = eval_data.get("relevance", {})
-                        ground_data = eval_data.get("groundedness", {})
-                        
-                        rel_score = "N/A"
-                        ground_score = "N/A"
-                        
-                        if isinstance(rel_data, dict):
-                            rel_score = rel_data.get("relevance", "N/A")
-                        
-                        if isinstance(ground_data, dict):
-                            ground_score = ground_data.get("groundedness", "N/A")
-                        
-                        csv_data.append({
-                            "Question": result["question"],
-                            "Answer": result["answer"],
-                            "Relevance_Score": rel_score,
-                            "Groundedness_Score": ground_score,
-                            "Sources_Length": len(result.get("sources", ""))
-                        })
-                
-                if csv_data:
-                    df = pd.DataFrame(csv_data)
-                    csv_buffer = io.StringIO()
-                    df.to_csv(csv_buffer, index=False)
-                    
-                    st.download_button(
-                        label="📊 Download Results as CSV",
-                        data=csv_buffer.getvalue(),
-                        file_name=f"rag_evaluation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
-            except Exception as e:
-                st.error(f"Error creating CSV: {str(e)}")
 
 if __name__ == "__main__":
     main() 
