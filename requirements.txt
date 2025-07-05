@@ -1,0 +1,12 @@
+openai
+numpy
+pandas
+azure-identity
+azure-search-documents
+python-dotenv
+pillow
+azure-ai-evaluation
+ipykernel
+requests
+streamlit
+plotly
