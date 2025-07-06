@@ -261,9 +261,6 @@ def display_single_result(result: Dict[str, Any], index: int = 0):
                 key=f"sources_{uuid.uuid4().hex[:8]}", 
                 label_visibility="hidden"
             )
-        
-        # Display evaluation metrics
-        display_evaluation_metrics(result)
 
 def create_summary_chart(results: List[Dict[str, Any]]):
     """Create a summary chart of evaluation results"""
@@ -449,10 +446,11 @@ def main():
     if st.session_state.evaluation_results:
         st.header("📊 Results")
         
-        # Summary statistics
-        if len(st.session_state.evaluation_results) > 1:
-            st.subheader("📈 Summary")
-            create_summary_chart(st.session_state.evaluation_results)
+        # Display evaluation metrics for the first result (or aggregate for batch)
+        if st.session_state.evaluation_results:
+            first_result = st.session_state.evaluation_results[0]
+            if "evaluation" in first_result:
+                display_evaluation_metrics(first_result)
         
         # Detailed results
         st.subheader("🔍 Detailed Results")
