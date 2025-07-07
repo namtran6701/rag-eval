@@ -343,6 +343,25 @@ def display_single_result(result: Dict[str, Any], index: int = 0):
     # Extract scores for display
     rel_score, ground_score = extract_scores_from_result(result)
     
+    # Extract reasoning from evaluation data
+    rel_reason = "No reasoning provided"
+    ground_reason = "No reasoning provided"
+    
+    if "evaluation" in result:
+        evaluation = result["evaluation"]
+        
+        # Extract relevance reasoning
+        if "relevance" in evaluation:
+            rel_data = evaluation["relevance"]
+            if isinstance(rel_data, dict):
+                rel_reason = rel_data.get("relevance_reason", "No reasoning provided")
+        
+        # Extract groundedness reasoning
+        if "groundedness" in evaluation:
+            ground_data = evaluation["groundedness"]
+            if isinstance(ground_data, dict):
+                ground_reason = ground_data.get("groundedness_reason", "No reasoning provided")
+    
     # Create expandable section for each result
     with st.expander(f"📝 Question {index + 1}: {result['question'][:100]}{'...' if len(result['question']) > 100 else ''}", expanded=True):
         
@@ -356,6 +375,17 @@ def display_single_result(result: Dict[str, Any], index: int = 0):
         with score_col2:
             ground_color = get_score_color(ground_score)
             st.markdown(f"**📚 Groundedness Score:** <span style='color: {ground_color}; font-weight: bold; font-size: 1.2em;'>{ground_score}/5</span>", unsafe_allow_html=True)
+        
+        # Display reasoning for each score
+        reasoning_col1, reasoning_col2 = st.columns(2)
+        
+        with reasoning_col1:
+            st.markdown("**Reasoning:**")
+            st.write(rel_reason)
+        
+        with reasoning_col2:
+            st.markdown("**Reasoning:**")
+            st.write(ground_reason)
         
         st.markdown("---")  # Separator line
         
