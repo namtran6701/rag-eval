@@ -16,7 +16,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import uuid
+import time
 from typing import Dict, Any, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Import your existing modules
 from main import RAGEvaluationPipeline
@@ -82,6 +84,105 @@ def create_pipeline():
             st.error(f"Failed to initialize pipeline: {str(e)}")
             return False
     return True
+
+def evaluate_single_question_worker(question: str, pipeline) -> Dict[str, Any]:
+    """
+    Worker function for parallel evaluation of a single question
+    
+    Args:
+        question: The question to evaluate
+        pipeline: The RAG evaluation pipeline
+        
+    Returns:
+        Dictionary containing evaluation result
+    """
+    try:
+        return pipeline.evaluate_question(question)
+    except Exception as e:
+        return {
+            "question": question,
+            "error": str(e)
+        }
+
+def evaluate_questions_parallel(questions: List[str], pipeline, max_workers: int = 4) -> List[Dict[str, Any]]:
+    """
+    Evaluate multiple questions in parallel
+    
+    Args:
+        questions: List of questions to evaluate
+        pipeline: The RAG evaluation pipeline
+        max_workers: Maximum number of parallel workers
+        
+    Returns:
+        List of evaluation results
+    """
+    results = []
+    completed_count = 0
+    
+    # Create progress tracking
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # Create a container for real-time results
+    results_container = st.container()
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_question = {
+            executor.submit(evaluate_single_question_worker, question, pipeline): question 
+            for question in questions
+        }
+        
+        # Process completed tasks as they finish
+        for future in as_completed(future_to_question):
+            question = future_to_question[future]
+            try:
+                result = future.result()
+                results.append(result)
+                completed_count += 1
+                
+                # Update progress
+                progress = completed_count / len(questions)
+                progress_bar.progress(progress)
+                status_text.text(f"Completed: {completed_count}/{len(questions)} questions")
+                
+                # Show real-time completion status
+                if completed_count <= 5:  # Show first 5 completions
+                    with results_container:
+                        if "error" not in result:
+                            st.success(f"✅ Question {completed_count}: Evaluated successfully")
+                        else:
+                            st.error(f"❌ Question {completed_count}: {result['error']}")
+                
+            except Exception as e:
+                # Handle any unexpected errors
+                results.append({
+                    "question": question,
+                    "error": f"Unexpected error: {str(e)}"
+                })
+                completed_count += 1
+                progress_bar.progress(completed_count / len(questions))
+                status_text.text(f"Completed: {completed_count}/{len(questions)} questions")
+    
+    # Clear progress indicators
+    progress_bar.empty()
+    status_text.empty()
+    results_container.empty()
+    
+    # Sort results to match original question order
+    question_to_result = {result.get('question', ''): result for result in results}
+    ordered_results = []
+    for question in questions:
+        if question in question_to_result:
+            ordered_results.append(question_to_result[question])
+        else:
+            # Fallback for any missing results
+            ordered_results.append({
+                "question": question,
+                "error": "Result not found"
+            })
+    
+    return ordered_results
 
 
 
@@ -651,38 +752,87 @@ def main():
             if len(questions) > 5:
                 st.write(f"... and {len(questions) - 5} more")
         
+        # Execution mode settings
+        st.subheader("🚀 Execution Settings")
+        
+        execution_mode = st.radio(
+            "Execution Mode",
+            ["Parallel (3 workers)", "Sequential"],
+            index=0,
+            help="Parallel mode uses 3 workers for optimal speed without hitting API rate limits"
+        )
+        
+        # Fixed number of workers
+        max_workers = 3
+        
         # Evaluate batch button
         if st.button("🚀 Evaluate Batch", type="primary"):
             if questions:
-                with st.spinner(f"Evaluating {len(questions)} questions..."):
-                    try:
-                        # Create progress bar
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
-                        
-                        results = []
-                        for i, question in enumerate(questions):
-                            status_text.text(f"Evaluating question {i+1}/{len(questions)}")
+                start_time = time.time()
+                
+                try:
+                    if execution_mode == "Parallel (3 workers)" and len(questions) > 1:
+                        st.info(f"🔄 Running parallel evaluation with {max_workers} workers...")
+                        results = evaluate_questions_parallel(
+                            questions, 
+                            st.session_state.pipeline, 
+                            max_workers=max_workers
+                        )
+                    else:
+                        # Sequential evaluation (fallback or single question)
+                        st.info("🔄 Running sequential evaluation...")
+                        with st.spinner(f"Evaluating {len(questions)} questions..."):
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
                             
-                            result = st.session_state.pipeline.evaluate_question(
-                                question
-                            )
-                            results.append(result)
+                            results = []
+                            for i, question in enumerate(questions):
+                                status_text.text(f"Evaluating question {i+1}/{len(questions)}")
+                                
+                                result = st.session_state.pipeline.evaluate_question(question)
+                                results.append(result)
+                                
+                                # Update progress
+                                progress_bar.progress((i + 1) / len(questions))
                             
-                            # Update progress
-                            progress_bar.progress((i + 1) / len(questions))
-                        
-                        # Store results
-                        st.session_state.evaluation_results = results
-                        
-                        # Clear progress indicators
-                        progress_bar.empty()
-                        status_text.empty()
-                        
-                        st.success(f"✅ Batch evaluation completed! Evaluated {len(questions)} questions.")
-                        
-                    except Exception as e:
-                        st.error(f"❌ Error during batch evaluation: {str(e)}")
+                            # Clear progress indicators
+                            progress_bar.empty()
+                            status_text.empty()
+                    
+                    # Calculate execution time
+                    execution_time = time.time() - start_time
+                    
+                    # Store results
+                    st.session_state.evaluation_results = results
+                    
+                    # Display completion message with performance metrics
+                    successful_count = len([r for r in results if "error" not in r])
+                    failed_count = len(results) - successful_count
+                    
+                    # Create completion summary
+                    completion_col1, completion_col2 = st.columns(2)
+                    
+                    with completion_col1:
+                        st.metric(
+                            "Execution Time",
+                            f"{execution_time:.1f}s",
+                            delta=f"~{execution_time/len(questions):.1f}s per question"
+                        )
+                    
+                    with completion_col2:
+                        st.metric(
+                            "Success Rate",
+                            f"{successful_count}/{len(questions)}",
+                            delta=f"{(successful_count/len(questions)*100):.1f}%"
+                        )
+                    
+                    if failed_count > 0:
+                        st.warning(f"⚠️ {failed_count} questions failed to evaluate. Check detailed results below.")
+                    
+                    st.success(f"✅ Batch evaluation completed! Evaluated {len(questions)} questions in {execution_time:.1f} seconds.")
+                    
+                except Exception as e:
+                    st.error(f"❌ Error during batch evaluation: {str(e)}")
             else:
                 st.warning("⚠️ Please enter questions to evaluate.")
     
