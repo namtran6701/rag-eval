@@ -15,14 +15,12 @@ import json
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime
 import uuid
 from typing import Dict, Any, List
 
 # Import your existing modules
 from main import RAGEvaluationPipeline
-from rag_api_client import RAGApiClient
-from rag_evaluator import RAGEvaluator
+
 
 # Page configuration
 st.set_page_config(
@@ -101,7 +99,7 @@ def get_score_color(score: Any) -> str:
         return "gray"
     
     try:
-        numeric_score = float(score)
+        numeric_score = int(score)
         if numeric_score >= 4:
             return "green"
         elif numeric_score >= 3:
@@ -156,10 +154,10 @@ def display_score_metric(title: str, emoji: str, metric_data: Any, metric_name: 
                     break
         
 
-        # Ensure score is numeric and convert to float
+        # Ensure score is numeric and convert to int
         if score != "N/A":
             try:
-                score = float(score)
+                score = int(score)
             except (ValueError, TypeError):
                 score = "N/A"
         
@@ -206,12 +204,12 @@ def extract_scores_from_result(result: Dict[str, Any]) -> tuple:
     
     # Convert to numeric, default to 0 if not convertible
     try:
-        rel_score = float(rel_score) if rel_score is not None else 0
+        rel_score = int(rel_score) if rel_score is not None else 0
     except (ValueError, TypeError):
         rel_score = 0
         
     try:
-        ground_score = float(ground_score) if ground_score is not None else 0
+        ground_score = int(ground_score) if ground_score is not None else 0
     except (ValueError, TypeError):
         ground_score = 0
     

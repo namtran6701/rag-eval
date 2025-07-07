@@ -1,5 +1,6 @@
 import os
 import dotenv
+import streamlit as st
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -8,8 +9,14 @@ class Config:
     """Configuration class for RAG evaluation system"""
     
     # Azure OpenAI Configuration
-    AZURE_OPENAI_SERVICE = os.environ.get("AZURE_OPENAI_SERVICE")
-    AZURE_OPENAI_DEPLOYMENT_NAME = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
+    if os.getenv("ENV") == "local":
+        AZURE_OPENAI_SERVICE = os.getenv("AZURE_OPENAI_SERVICE")
+        AZURE_OPENAI_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
+    else:
+        AZURE_OPENAI_SERVICE = st.secrets["AZURE_OPENAI_SERVICE"]
+        AZURE_OPENAI_DEPLOYMENT_NAME = st.secrets["AZURE_OPENAI_DEPLOYMENT_NAME"]
+        AZURE_OPENAI_API_KEY = st.secrets["AZURE_OPENAI_API_KEY"]
     
     # RAG API Configuration
     RAG_API_URL = "https://fnorch0-vm2b2htvuuclm.azurewebsites.net/api/orc"
