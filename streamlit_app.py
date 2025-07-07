@@ -251,7 +251,7 @@ def display_single_result(result: Dict[str, Any], index: int = 0):
         
         # Display sources
         if result.get('sources'):
-            st.write("**Sources:**")
+            st.write("**Context:**")
             st.text_area(
                 "Sources",
                 result['sources'], 

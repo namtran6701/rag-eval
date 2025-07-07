@@ -20,7 +20,7 @@ class RAGEvaluator:
         
         self.azure_openai_service = azure_openai_service or Config.AZURE_OPENAI_SERVICE
         self.deployment_name = deployment_name or Config.AZURE_OPENAI_DEPLOYMENT_NAME
-        self.api_key = Config.AZURE_OPENAI_API_KEY
+        self.api_key = Config.AZURE_OPENAI_KEY
         
         # Configure Azure OpenAI model
         self.model_config = AzureOpenAIModelConfiguration(
