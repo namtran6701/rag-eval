@@ -239,8 +239,24 @@ def display_single_result(result: Dict[str, Any], index: int = 0):
         st.error(f"Error: {result['error']}")
         return
     
+    # Extract scores for display
+    rel_score, ground_score = extract_scores_from_result(result)
+    
     # Create expandable section for each result
     with st.expander(f"📝 Question {index + 1}: {result['question'][:100]}{'...' if len(result['question']) > 100 else ''}", expanded=True):
+        
+        # Display scores at the top
+        score_col1, score_col2 = st.columns(2)
+        
+        with score_col1:
+            rel_color = get_score_color(rel_score)
+            st.markdown(f"**🎯 Relevance Score:** <span style='color: {rel_color}; font-weight: bold; font-size: 1.2em;'>{rel_score}/5</span>", unsafe_allow_html=True)
+        
+        with score_col2:
+            ground_color = get_score_color(ground_score)
+            st.markdown(f"**📚 Groundedness Score:** <span style='color: {ground_color}; font-weight: bold; font-size: 1.2em;'>{ground_score}/5</span>", unsafe_allow_html=True)
+        
+        st.markdown("---")  # Separator line
         
         # Display question and answer
         st.write("**Question:**")
@@ -315,7 +331,7 @@ def calculate_batch_statistics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def display_batch_overview(stats: Dict[str, Any]):
     """Display overview statistics for batch evaluation"""
-    st.subheader("📊 Batch Evaluation Overview")
+    st.subheader("Batch Evaluation Overview")
     
     # Key metrics in columns
     col1, col2, col3, col4 = st.columns(4)
