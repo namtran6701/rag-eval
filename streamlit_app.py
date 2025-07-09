@@ -888,12 +888,25 @@ def main():
         for i, result in enumerate(st.session_state.evaluation_results):
             if "error" not in result:
                 rel_score, ground_score = extract_scores_from_result(result)
+                
+                relevance_reason = "No reasoning provided"
+                groundedness_reason = "No reasoning provided"
+                
+                if "evaluation" in result:
+                    evaluation = result["evaluation"]
+                    if "relevance" in evaluation and isinstance(evaluation["relevance"], dict):
+                        relevance_reason = evaluation["relevance"].get("relevance_reason", "No reasoning provided")
+                    if "groundedness" in evaluation and isinstance(evaluation["groundedness"], dict):
+                        groundedness_reason = evaluation["groundedness"].get("groundedness_reason", "No reasoning provided")
+                
                 download_data.append({
                     'question_number': i + 1,
                     'question': result.get('question', 'N/A'),
                     'answer': result.get('answer', 'N/A'),
                     'relevance_score': rel_score,
+                    'relevance_reason': relevance_reason,
                     'groundedness_score': ground_score,
+                    'groundedness_reason': groundedness_reason,
                     'sources': result.get('sources', 'N/A')
                 })
             else:
@@ -902,7 +915,9 @@ def main():
                     'question': result.get('question', 'N/A'),
                     'answer': 'Error',
                     'relevance_score': 'N/A',
+                    'relevance_reason': 'N/A',
                     'groundedness_score': 'N/A',
+                    'groundedness_reason': 'N/A',
                     'sources': 'N/A',
                     'error': result.get('error', 'Unknown error')
                 })
