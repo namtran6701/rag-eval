@@ -53,24 +53,40 @@ class RAGApiClient:
             )
             response.raise_for_status()
 
-            # Extract just the JSON part from response
+                        # Find the end of the JSON part
             raw_response = response.text
-            json_match = re.search(r"^(\{.*?\})", raw_response, re.DOTALL)
+            json_end_index = -1
+            brace_count = 0
+            in_string = False
 
-            if json_match:
-                json_part = json_match.group(1)
-                json_data = json.loads(json_part)
-
-                # Extract the markdown content (everything after the JSON)
-                markdown_content = raw_response[json_match.end():].strip()
-
-                # Return both JSON data and markdown content
-                return {
-                    "json_data": json_data, 
-                    "markdown_content": markdown_content
-                }
+            for i, char in enumerate(raw_response):
+                if char == '"':
+                    # Check for escaped quotes
+                    if i > 0 and raw_response[i-1] != '\\':
+                        in_string = not in_string
+                elif not in_string:
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            json_end_index = i + 1
+                            break
+            
+            if json_end_index != -1:
+                json_part = raw_response[:json_end_index]
+                markdown_content = raw_response[json_end_index:].strip()
+                
+                try:
+                    json_data = json.loads(json_part)
+                    return {
+                        "json_data": json_data,
+                        "markdown_content": markdown_content
+                    }
+                except json.JSONDecodeError as e:
+                    return {"error": f"Failed to parse JSON response: {str(e)}"}
             else:
-                return {"error": "Could not parse JSON from response"}
+                return {"error": "Could not find valid JSON in response"}
 
         except requests.RequestException as e:
             return {"error": f"API request failed: {str(e)}"}
