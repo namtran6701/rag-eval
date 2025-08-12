@@ -10,3 +10,4 @@ ipykernel
 requests
 streamlit
 plotly
+azure-keyvault-secrets

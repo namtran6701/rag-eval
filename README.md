@@ -26,6 +26,7 @@ Create a `.env` file with your Azure OpenAI credentials:
 ```env
 AZURE_OPENAI_SERVICE=your-service-name
 AZURE_OPENAI_DEPLOYMENT_NAME=your-deployment-name
+AZURE_KEY_VAULT_NAME=your-keyvault-name
 ```
 
 ### 3. Launch Web Interface

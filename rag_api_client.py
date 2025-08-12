@@ -3,6 +3,7 @@ import json
 import re
 from typing import Dict, Any, Optional
 from config import Config
+from auth import get_azure_key_vault_secret
 
 class RAGApiClient:
     """Client for interacting with the RAG API"""
@@ -37,6 +38,9 @@ class RAGApiClient:
         Returns:
             Dictionary containing 'json_data' and 'markdown_content', or 'error' if failed
         """
+        keySecretName = "orchestrator-host--functionKey"
+        functionKey = get_azure_key_vault_secret(keySecretName)
+        headers = {"Content-Type": "text/event-stream", "x-functions-key": functionKey}
         payload = {
             "conversation_id": conversation_id,
             "question": question,
@@ -49,7 +53,7 @@ class RAGApiClient:
             response = requests.post(
                 self.api_url, 
                 json=payload, 
-                headers={"Content-Type": "application/json"}
+                headers=headers
             )
             response.raise_for_status()
 
