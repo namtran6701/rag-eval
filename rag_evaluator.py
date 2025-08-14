@@ -37,14 +37,19 @@ class RAGEvaluator:
     def relevance_evaluator(self):
         """Lazy initialization of relevance evaluator"""
         if self._relevance_evaluator is None:
-            self._relevance_evaluator = RelevanceEvaluator(self.model_config)
+            self._relevance_evaluator = RelevanceEvaluator(
+                model_config=self.model_config
+            )
         return self._relevance_evaluator
     
     @property
     def groundedness_evaluator(self):
         """Lazy initialization of groundedness evaluator"""
         if self._groundedness_evaluator is None:
-            self._groundedness_evaluator = GroundednessEvaluator(self.model_config)
+            self._groundedness_evaluator = GroundednessEvaluator(
+                prompty_file="prompts/prompt_groundedness.prompty",
+                model_config=self.model_config
+            )
         return self._groundedness_evaluator
     
     def evaluate_relevance(self, query: str, response: str, context: str) -> Dict[str, Any]:

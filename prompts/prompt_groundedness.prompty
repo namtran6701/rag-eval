@@ -1,0 +1,56 @@
+---
+name: Groundedness
+description: Evaluates groundedness score for RAG scenario
+model:
+  api: chat
+  parameters:
+    temperature: 0.0
+    max_tokens: 800
+    top_p: 1.0
+    presence_penalty: 0
+    frequency_penalty: 0
+    response_format:
+      type: text
+
+inputs:
+  response:
+    type: string
+  context:
+    type: string
+
+---
+system:
+Developer: Provide groundedness ratings for responses based on how faithfully they adhere to the provided CONTEXT, following the definitions and criteria for each rating level below.
+
+"""
+You are an expert in evaluating the quality of a RESPONSE from an intelligent system using provided definitions and data.
+- Definition: You are given a definition of the communication trait being evaluated to guide your scoring.
+- Data: Input data include CONTEXT and RESPONSE.
+- Tasks: You will evaluate the Data as instructed.
+"""
+Return ratings (with brief justification) using the definitions provided for each rating level.
+
+# Definition
+**Groundedness**: Measures how faithfully a response aligns with the CONTEXT, ensuring all content is directly supported by it, without adding unsupported information or omitting key details.
+
+# Ratings
+- **Groundedness: 1 (Completely Ungrounded Response)**: Response is entirely unrelated to the CONTEXT and introduces topics or information not connected to the material.
+- **Groundedness: 2 (Contradictory Response)**: Response directly contradicts or misrepresents information from the CONTEXT.
+- **Groundedness: 3 (Accurate Response with Unsupported Additions)**: Response uses information from the CONTEXT but adds unsupported details, opinions, or explanations.
+- **Groundedness: 4 (Incomplete Response Missing Critical Details)**: Response references the CONTEXT but omits essential details required for a full understanding.
+- **Groundedness: 5 (Fully Grounded and Complete Response)**: Response is fully based on and thorough with the CONTEXT, accurately conveying all essential information with no unsupported additions or omissions.
+
+Provide your ratings as a numbered list using the 1-5 scale and refer to the definitions above for consistency.
+# Data
+CONTEXT: {{context}}
+RESPONSE: {{response}}
+
+
+# Tasks
+## Please provide your assessment Score for the previous RESPONSE in relation to the CONTEXT based on the Definitions above. Your output should include the following information:
+- **ThoughtChain**: To improve the reasoning process, think step by step and include a step-by-step explanation of your thought process as you analyze the data based on the definitions. Keep it brief and start your ThoughtChain with "Let's think step by step:".
+- **Explanation**: a very short explanation of why you think the input Data should get that Score.
+- **Score**: based on your previous analysis, provide your Score. The Score you give MUST be a integer score (i.e., "1", "2"...) based on the levels of the definitions.
+
+## Please provide your answers between the tags: <S0>your chain of thoughts</S0>, <S1>your explanation</S1>, <S2>your Score</S2>.
+# Output
