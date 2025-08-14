@@ -19,12 +19,12 @@ class Config:
         AZURE_OPENAI_KEY = st.secrets["AZURE_OPENAI_KEY"]
     
     # RAG API Configuration
-    RAG_API_URL = "https://fnorch0-vm2b2htvuuclm.azurewebsites.net/api/orc"
+    RAG_API_URL = os.getenv("RAG_API_URL")
     
     # Default client configuration (should be configurable in production)
-    DEFAULT_CLIENT_PRINCIPAL_ID = "96567627-0cce-45b4-97f0-9972d03a268d"
-    DEFAULT_CLIENT_PRINCIPAL_NAME = "sheep"
-    DEFAULT_CLIENT_PRINCIPAL_ORGANIZATION = "6c33b530-22f6-49ca-831b-25d587056237"
+    DEFAULT_CLIENT_PRINCIPAL_ID = os.getenv("DEFAULT_CLIENT_PRINCIPAL_ID")
+    DEFAULT_CLIENT_PRINCIPAL_NAME = os.getenv("DEFAULT_CLIENT_PRINCIPAL_NAME")
+    DEFAULT_CLIENT_PRINCIPAL_ORGANIZATION = os.getenv("DEFAULT_CLIENT_PRINCIPAL_ORGANIZATION")
     
     @classmethod
     def validate(cls):

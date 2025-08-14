@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from azure.ai.evaluation import AzureOpenAIModelConfiguration, GroundednessEvaluator, RelevanceEvaluator
 from config import Config
+from ragas import EvaluationDataset
 
 class RAGEvaluator:
     """Evaluator for RAG system responses using Azure OpenAI"""
@@ -116,11 +117,11 @@ class RAGEvaluator:
         }
         
         # Evaluate relevance
-        relevance_result = self.evaluate_relevance(query, response, context)
-        results["relevance"] = relevance_result
+        #relevance_result = self.evaluate_relevance(query, response, context)
+        #results["relevance"] = relevance_result
         
         # Evaluate groundedness
-        groundedness_result = self.evaluate_groundedness(response, context)
-        results["groundedness"] = groundedness_result
+        #groundedness_result = self.evaluate_groundedness(response, context)
+        #results["groundedness"] = groundedness_result
         
         return results 
