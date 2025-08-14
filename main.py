@@ -146,11 +146,12 @@ class RAGEvaluationPipeline:
         
         # Add RAGAS evaluation
         try:
+            #TODO: THIS THING SHOULD BE EXECUTE OVER ALL THE QUESTIONS IN THE BATCH AFTER ALL THE RESPONSES ARE GENERATED
             ragas_result = self.ragas_evaluate([question_text], [answer], [expected_answer], [sources])
             ragas_metrics = {
-                "context_recall": ragas_result.get('context_recall', 0.0),
-                "faithfulness": ragas_result.get('faithfulness', 0.0),
-                "factual_correctness": ragas_result.get('factual_correctness', 0.0)
+                "context_recall": ragas_result.scores[0].get('context_recall', 0.0),
+                "faithfulness": ragas_result.scores[0].get('faithfulness', 0.0),
+                "factual_correctness": ragas_result.scores[0].get('factual_correctness', 0.0),
             }
         except Exception as e:
             print(f"Warning: RAGAS evaluation failed: {e}")
@@ -183,7 +184,6 @@ class RAGEvaluationPipeline:
         """
         Evaluate the answer using RAGAS
         """
-        st.write(f"Evaluating RAGAS for question: ragas_evaluate {type(sources)}")
         return ragas_evaluate(questions, answers, expected_answers, sources)
 
 def main():
