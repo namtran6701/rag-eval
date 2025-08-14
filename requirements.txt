@@ -12,3 +12,4 @@ streamlit
 plotly
 azure-keyvault-secrets
 ragas
+scikit-learn
