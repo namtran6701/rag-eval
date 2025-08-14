@@ -1,0 +1,108 @@
+from difflib import SequenceMatcher
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from typing import Dict, Any, List
+import re
+
+
+def calculate_text_similarity(text1: str, text2: str) -> Dict[str, float]:
+    """
+    Calculate similarity between two texts using multiple methods
+    
+    Args:
+        text1: First text
+        text2: Second text
+        
+    Returns:
+        Dictionary with different similarity scores
+    """
+    # Clean texts
+    text1_clean = re.sub(r'\s+', ' ', text1.strip())
+    text2_clean = re.sub(r'\s+', ' ', text2.strip())
+    
+    # Sequence similarity (character-based)
+    sequence_similarity = SequenceMatcher(None, text1_clean, text2_clean).ratio()
+    
+    # TF-IDF Cosine similarity (word-based)
+    try:
+        vectorizer = TfidfVectorizer(stop_words='english', max_features=1000)
+        tfidf_matrix = vectorizer.fit_transform([text1_clean, text2_clean])
+        cosine_sim = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
+    except:
+        cosine_sim = 0.0
+    
+    # Word overlap similarity
+    words1 = set(text1_clean.lower().split())
+    words2 = set(text2_clean.lower().split())
+    word_overlap = len(words1.intersection(words2)) / max(len(words1.union(words2)), 1)
+    
+    return {
+        "sequence_similarity": sequence_similarity,
+        "cosine_similarity": cosine_sim,
+        "word_overlap": word_overlap,
+        "average_similarity": (sequence_similarity + cosine_sim + word_overlap) / 3
+    }
+
+
+def calculate_length_comparison(text1: str, text2: str) -> Dict[str, Any]:
+    """
+    Compare lengths of two texts
+    
+    Args:
+        text1: First text
+        text2: Second text
+        
+    Returns:
+        Dictionary with length comparison metrics
+    """
+    len1 = len(text1)
+    len2 = len(text2)
+    
+    length_ratio = min(len1, len2) / max(len1, len2) if max(len1, len2) > 0 else 1.0
+    length_diff = abs(len1 - len2)
+    length_diff_percentage = (length_diff / max(len1, len2)) * 100 if max(len1, len2) > 0 else 0
+    
+    # Word counts
+    words1 = len(text1.split())
+    words2 = len(text2.split())
+    word_ratio = min(words1, words2) / max(words1, words2) if max(words1, words2) > 0 else 1.0
+    
+    return {
+        "text1_length": len1,
+        "text2_length": len2,
+        "length_ratio": length_ratio,
+        "length_difference": length_diff,
+        "length_diff_percentage": length_diff_percentage,
+        "text1_words": words1,
+        "text2_words": words2,
+        "word_ratio": word_ratio,
+        "length_similarity_score": length_ratio  # Score based on length similarity
+    }
+
+
+def extract_text_samples(text: str, sample_size: int = 200) -> List[str]:
+    """
+    Extract arbitrary samples from text for comparison
+    
+    Args:
+        text: Input text
+        sample_size: Size of each sample
+        
+    Returns:
+        List of text samples
+    """
+    if len(text) <= sample_size:
+        return [text]
+    
+    samples = []
+    # Beginning sample
+    samples.append(text[:sample_size])
+    
+    # Middle sample
+    mid_start = len(text) // 2 - sample_size // 2
+    samples.append(text[mid_start:mid_start + sample_size])
+    
+    # End sample
+    samples.append(text[-sample_size:])
+    
+    return samples

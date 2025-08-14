@@ -124,4 +124,4 @@ class RAGEvaluator:
         #groundedness_result = self.evaluate_groundedness(response, context)
         #results["groundedness"] = groundedness_result
         
-        return results 
+        return results

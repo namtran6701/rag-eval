@@ -8,11 +8,13 @@ This module orchestrates the complete RAG evaluation process:
 3. Evaluate the response using Azure OpenAI evaluators
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import json
 from rag_api_client import RAGApiClient
 from rag_evaluator import RAGEvaluator
+from indicators import calculate_text_similarity, calculate_length_comparison, extract_text_samples
 from config import Config
+import streamlit as st
 
 class RAGEvaluationPipeline:
     """Main pipeline for RAG evaluation"""
@@ -102,6 +104,62 @@ class RAGEvaluationPipeline:
             print()
         
         return results
+    
+    def automated_evaluate_question(self, question_text: str, expected_answer: str, expected_sources: str, conversation_id: str = "") -> Dict[str, Any]:
+        """
+        Automated evaluation of a single question from the batch data
+        
+        Args:
+            question_text: The question text to evaluate
+            pipeline: RAG evaluation pipeline
+            
+        Returns:
+            Dictionary containing comprehensive evaluation results
+        """
+        # Step 1: Get RAG response
+        rag_data = self.api_client.get_rag_data(question_text, conversation_id)
+        answer = rag_data.get("answer", "")
+        sources = rag_data.get("sources", "")
+        
+        # Compare the provided question with the batch question
+        question_similarity = calculate_text_similarity(answer, expected_answer)
+        
+        # Perform similarity comparison between answers
+        answer_similarity_metrics = calculate_text_similarity(answer, expected_answer)
+        sources_similarity_metrics = calculate_text_similarity(sources, expected_sources)
+        
+        # Perform length comparison
+        length_metrics = calculate_length_comparison(answer, expected_answer)
+        sources_length_metrics = calculate_length_comparison(sources, expected_sources)
+        
+        # Extract and compare samples
+        stored_samples = extract_text_samples(answer)
+        generated_samples = extract_text_samples(expected_answer)
+        
+        sample_similarities = []
+        for i, (stored_sample, generated_sample) in enumerate(zip(stored_samples, generated_samples)):
+            sample_sim = calculate_text_similarity(stored_sample, generated_sample)
+            sample_similarities.append({
+                "sample_index": i,
+                "similarity": sample_sim["average_similarity"]
+            })
+        
+        # Compile comprehensive results
+        automated_result = {
+            "question_text": question_text,
+            "expected_answer": expected_answer,
+            "expected_sources": expected_sources,
+            "answer": answer,
+            "sources": sources,
+            "question_similarity": question_similarity,
+            "answer_similarity_metrics": answer_similarity_metrics,
+            "sources_similarity_metrics": sources_similarity_metrics,
+            "length_metrics": length_metrics,
+            "sources_length_metrics": sources_length_metrics,
+            "sample_similarities": sample_similarities,
+        }
+        
+        return automated_result
 
 def main():
     """Main function for running RAG evaluation"""

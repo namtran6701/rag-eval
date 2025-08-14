@@ -7,6 +7,11 @@ It uses a modular component-based architecture for better maintainability.
 """
 
 import streamlit as st
+import logging
+
+# Configure logging to show in console
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Import components
 from components.data_loader import initialize_session_state, create_pipeline, display_sidebar_info
@@ -14,6 +19,7 @@ from components.single_evaluation import display_single_evaluation_interface, di
 from components.batch_evaluation import display_batch_evaluation_interface
 from components.automated_testing import display_automated_testing_interface, display_automated_test_results
 from components.results_display import display_batch_results, display_download_section
+from components.utils import display_indicator_interpretation_guide
 
 
 # Page configuration
@@ -72,6 +78,14 @@ def main():
     # Sidebar for configuration
     st.sidebar.header("⚙️ Configuration")
     
+    # Debug mode toggle
+    debug_mode = st.sidebar.checkbox("🐛 Debug Mode", help="Show debug information in the app")
+    if debug_mode:
+        st.session_state.debug_mode = True
+        logger.info("Debug mode enabled")
+    else:
+        st.session_state.debug_mode = False
+    
     # Display batch data information in sidebar
     display_sidebar_info()
     
@@ -82,8 +96,8 @@ def main():
     # Evaluation mode selection
     eval_mode = st.sidebar.radio(
         "Select Evaluation Mode:",
-        ["Single Question", "Batch Questions", "Automated Testing"],
-        help="Choose whether to evaluate one question, multiple questions, or run automated testing"
+        ["Single Question", "Batch Questions", "Automated Testing", "📊 Indicator Guide"],
+        help="Choose whether to evaluate one question, multiple questions, run automated testing, or view the indicator interpretation guide"
     )
     
     # Main content area
@@ -104,6 +118,10 @@ def main():
         results = display_automated_testing_interface(st.session_state.pipeline)
         if results:
             st.session_state.automated_test_results = results
+    
+    elif eval_mode == "📊 Indicator Guide":
+        # Display indicator interpretation guide
+        display_indicator_interpretation_guide()
     
     # Display results if available
     if st.session_state.evaluation_results:

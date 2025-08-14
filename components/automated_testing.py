@@ -11,12 +11,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from typing import Dict, Any, List
-from difflib import SequenceMatcher
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import re
 from components.utils import get_batch_data
 
+from components.utils import display_indicator_interpretation_guide
 
 def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
     """
@@ -29,6 +26,7 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
         List of automated test results
     """
     st.header("🧪 Automated Testing")
+    display_indicator_interpretation_guide()
     
     # Get batch data
     questions, answers, sources = get_batch_data()
@@ -85,7 +83,11 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
             help="Sequential mode is faster but uses more resources"
         )
         
-        max_workers = 1
+    # Test a single question
+    if st.button("Test single question (first)"):
+        if len(questions) > 0:
+            test_result = pipeline.automated_evaluate_question(questions[0], answers[0], sources[0])
+            display_automated_test_results([test_result])
     
     # Show test preview
     st.subheader("📋 Test Preview")
@@ -119,12 +121,6 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
         st.write(f"- Range: {test_range}")
         st.write(f"- Indices: {question_indices[:10]}{'...' if len(question_indices) > 10 else ''}")
         st.write(f"- Max valid index: {len(questions) - 1}")
-        
-        # Test a single index
-        if st.button("Test single index (0)"):
-            if len(questions) > 0:
-                test_result = evaluate_single_question_automated(0, pipeline)
-                st.json(test_result)
     
     # Run automated testing
     if st.button("🚀 Start Automated Testing", type="primary"):
@@ -144,8 +140,16 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
                     for i, question_idx in enumerate(question_indices):
                         status_text.text(f"Testing question {i+1}/{len(question_indices)}")
                         
-                        result = evaluate_single_question_automated(question_idx, pipeline)
-                        results.append(result)
+                        # Get the actual question text for the index
+                        if question_idx < len(questions):
+                            question_text = questions[question_idx]
+                            result = pipeline.automated_evaluate_question(question_text, answers[question_idx], sources[question_idx])
+                            results.append(result)
+                        else:
+                            results.append({
+                                "error": f"Question index {question_idx} out of range (max: {len(questions)-1})",
+                                "question_index": question_idx
+                            })
                         
                         # Update progress
                         progress_bar.progress((i + 1) / len(question_indices))
@@ -169,213 +173,45 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
                 return []
     
     return []
-
-
 from components.utils import get_batch_data
 
-
-def calculate_text_similarity(text1: str, text2: str) -> Dict[str, float]:
-    """
-    Calculate similarity between two texts using multiple methods
-    
-    Args:
-        text1: First text
-        text2: Second text
-        
-    Returns:
-        Dictionary with different similarity scores
-    """
-    # Clean texts
-    text1_clean = re.sub(r'\s+', ' ', text1.strip())
-    text2_clean = re.sub(r'\s+', ' ', text2.strip())
-    
-    # Sequence similarity (character-based)
-    sequence_similarity = SequenceMatcher(None, text1_clean, text2_clean).ratio()
-    
-    # TF-IDF Cosine similarity (word-based)
-    try:
-        vectorizer = TfidfVectorizer(stop_words='english', max_features=1000)
-        tfidf_matrix = vectorizer.fit_transform([text1_clean, text2_clean])
-        cosine_sim = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
-    except:
-        cosine_sim = 0.0
-    
-    # Word overlap similarity
-    words1 = set(text1_clean.lower().split())
-    words2 = set(text2_clean.lower().split())
-    word_overlap = len(words1.intersection(words2)) / max(len(words1.union(words2)), 1)
-    
-    return {
-        "sequence_similarity": sequence_similarity,
-        "cosine_similarity": cosine_sim,
-        "word_overlap": word_overlap,
-        "average_similarity": (sequence_similarity + cosine_sim + word_overlap) / 3
-    }
-
-
-def calculate_length_comparison(text1: str, text2: str) -> Dict[str, Any]:
-    """
-    Compare lengths of two texts
-    
-    Args:
-        text1: First text
-        text2: Second text
-        
-    Returns:
-        Dictionary with length comparison metrics
-    """
-    len1 = len(text1)
-    len2 = len(text2)
-    
-    length_ratio = min(len1, len2) / max(len1, len2) if max(len1, len2) > 0 else 1.0
-    length_diff = abs(len1 - len2)
-    length_diff_percentage = (length_diff / max(len1, len2)) * 100 if max(len1, len2) > 0 else 0
-    
-    # Word counts
-    words1 = len(text1.split())
-    words2 = len(text2.split())
-    word_ratio = min(words1, words2) / max(words1, words2) if max(words1, words2) > 0 else 1.0
-    
-    return {
-        "text1_length": len1,
-        "text2_length": len2,
-        "length_ratio": length_ratio,
-        "length_difference": length_diff,
-        "length_diff_percentage": length_diff_percentage,
-        "text1_words": words1,
-        "text2_words": words2,
-        "word_ratio": word_ratio,
-        "length_similarity_score": length_ratio  # Score based on length similarity
-    }
-
-
-def extract_text_samples(text: str, sample_size: int = 200) -> List[str]:
-    """
-    Extract arbitrary samples from text for comparison
-    
-    Args:
-        text: Input text
-        sample_size: Size of each sample
-        
-    Returns:
-        List of text samples
-    """
-    if len(text) <= sample_size:
-        return [text]
-    
-    samples = []
-    # Beginning sample
-    samples.append(text[:sample_size])
-    
-    # Middle sample
-    mid_start = len(text) // 2 - sample_size // 2
-    samples.append(text[mid_start:mid_start + sample_size])
-    
-    # End sample
-    samples.append(text[-sample_size:])
-    
-    return samples
-
-
-def evaluate_single_question_automated(question_idx: int, pipeline) -> Dict[str, Any]:
-    """
-    Automated evaluation of a single question from the batch data
-    
-    Args:
-        question_idx: Index of the question in the batch arrays
-        pipeline: RAG evaluation pipeline
-        
-    Returns:
-        Dictionary containing comprehensive evaluation results
-    """
-    try:
-        questions, answers, sources = get_batch_data()
-        
-        # Debug information
-        debug_info = {
-            "questions_length": len(questions),
-            "answers_length": len(answers),
-            "sources_length": len(sources),
-            "requested_index": question_idx
-        }
-        
-        # Check if arrays have different lengths
-        if not (len(questions) == len(answers) == len(sources)):
-            return {
-                "error": f"Array length mismatch: questions={len(questions)}, answers={len(answers)}, sources={len(sources)}",
-                "debug_info": debug_info
-            }
-        
-        # Check if index is out of range
-        if question_idx >= len(questions):
-            return {
-                "error": f"Question index {question_idx} out of range (max: {len(questions)-1})",
-                "debug_info": debug_info
-            }
-        
-        # Check if arrays are empty
-        if len(questions) == 0:
-            return {
-                "error": "No questions loaded in batch data",
-                "debug_info": debug_info
-            }
-        
-        question = questions[question_idx]
-        stored_answer = answers[question_idx]
-        stored_sources = sources[question_idx]
-        
-        # Get new response from pipeline
-        result = pipeline.evaluate_question(question)
-        generated_answer = result.get('response', '')
-        generated_sources = result.get('sources', '')
-        
-        # Perform similarity comparison
-        similarity_metrics = calculate_text_similarity(stored_answer, generated_answer)
-        
-        # Perform length comparison
-        length_metrics = calculate_length_comparison(stored_answer, generated_answer)
-        
-        # Extract and compare samples
-        stored_samples = extract_text_samples(stored_answer)
-        generated_samples = extract_text_samples(generated_answer)
-        
-        sample_similarities = []
-        for i, (stored_sample, generated_sample) in enumerate(zip(stored_samples, generated_samples)):
-            sample_sim = calculate_text_similarity(stored_sample, generated_sample)
-            sample_similarities.append({
-                "sample_index": i,
-                "similarity": sample_sim["average_similarity"]
-            })
-        
-        # Compile comprehensive results
-        automated_result = {
-            "question_index": question_idx,
-            "question": question,
-            "stored_answer": stored_answer,
-            "generated_answer": generated_answer,
-            "stored_sources": stored_sources,
-            "generated_sources": generated_sources,
-            "similarity_metrics": similarity_metrics,
-            "length_metrics": length_metrics,
-            "sample_similarities": sample_similarities,
-            "evaluation": result.get('evaluation', {}),
-            "timestamp": time.time()
-        }
-        
-        return automated_result
-        
-    except Exception as e:
-        return {
-            "question_index": question_idx,
-            "error": f"Automated evaluation failed: {str(e)}"
-        }
-
-
 def display_automated_test_results(results: List[Dict[str, Any]]):
-    """Display results from automated testing"""
+    """Display optimized results from automated testing with space-efficient layout"""
     if not results:
         st.info("No automated test results to display.")
         return
+    
+    # Add custom CSS for better styling
+    st.markdown("""
+    <style>
+    .comparison-container {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+        border: 1px solid #e9ecef;
+    }
+    .metric-good { color: #28a745; font-weight: bold; }
+    .metric-fair { color: #ffc107; font-weight: bold; }
+    .metric-poor { color: #dc3545; font-weight: bold; }
+    .text-comparison {
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    .similarity-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+        margin: 2px;
+    }
+    .sim-excellent { background-color: #d4edda; color: #155724; }
+    .sim-good { background-color: #fff3cd; color: #856404; }
+    .sim-poor { background-color: #f8d7da; color: #721c24; }
+    </style>
+    """, unsafe_allow_html=True)
     
     st.subheader("🧪 Automated Testing Results")
     
@@ -393,30 +229,31 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
         st.metric("Failed", len(failed_tests), delta=f"-{len(failed_tests)/len(results)*100:.1f}%" if failed_tests else "0%")
     with col4:
         if successful_tests:
-            avg_similarity = np.mean([r['similarity_metrics']['average_similarity'] for r in successful_tests])
+            avg_similarity = np.mean([r['answer_similarity_metrics']['average_similarity'] for r in successful_tests])
             st.metric("Avg Similarity", f"{avg_similarity:.3f}")
         else:
             st.metric("Avg Similarity", "N/A")
     
     # Detailed results tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "📈 Similarity Analysis", "📏 Length Analysis", "🔍 Detailed Results"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "📈 Similarity Analysis", "📏 Length Analysis", "🔍 Detailed Results", "📋 Side-by-Side Comparison"])
     
     with tab1:
         if successful_tests:
             # Create overview dataframe
             overview_data = []
-            for result in successful_tests:
+            for i, result in enumerate(successful_tests):
                 overview_data.append({
-                    "Question #": result['question_index'] + 1,
-                    "Avg Similarity": result['similarity_metrics']['average_similarity'],
-                    "Length Ratio": result['length_metrics']['length_ratio'],
-                    "Word Ratio": result['length_metrics']['word_ratio'],
-                    "Cosine Similarity": result['similarity_metrics']['cosine_similarity'],
-                    "Sequence Similarity": result['similarity_metrics']['sequence_similarity']
+                    "Question #": i + 1,
+                    "Avg Similarity": f"{result['answer_similarity_metrics']['average_similarity']:.3f}",
+                    "Length Ratio": f"{result['length_metrics']['length_ratio']:.3f}",
+                    "Word Ratio": f"{result['length_metrics']['word_ratio']:.3f}",
+                    "Cosine Sim": f"{result['answer_similarity_metrics']['cosine_similarity']:.3f}",
+                    "Sequence Sim": f"{result['answer_similarity_metrics']['sequence_similarity']:.3f}",
+                    "Word Overlap": f"{result['answer_similarity_metrics']['word_overlap']:.3f}"
                 })
             
             df_overview = pd.DataFrame(overview_data)
-            st.dataframe(df_overview, use_container_width=True)
+            st.dataframe(df_overview, use_container_width=True, height=300)
             
             # Download button for results
             csv_data = df_overview.to_csv(index=False)
@@ -430,7 +267,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
     with tab2:
         if successful_tests:
             # Similarity distribution
-            similarities = [r['similarity_metrics']['average_similarity'] for r in successful_tests]
+            similarities = [r['answer_similarity_metrics']['average_similarity'] for r in successful_tests]
             
             fig_hist = px.histogram(
                 x=similarities,
@@ -438,17 +275,18 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                 title="Distribution of Average Similarity Scores",
                 labels={"x": "Average Similarity Score", "y": "Count"}
             )
+            fig_hist.update_layout(height=400)
             st.plotly_chart(fig_hist, use_container_width=True)
             
             # Similarity types comparison
             similarity_types = []
-            for result in successful_tests:
-                sim_metrics = result['similarity_metrics']
+            for i, result in enumerate(successful_tests):
+                answer_sim_metrics = result['answer_similarity_metrics']
                 similarity_types.append({
-                    "Question": result['question_index'] + 1,
-                    "Sequence": sim_metrics['sequence_similarity'],
-                    "Cosine": sim_metrics['cosine_similarity'],
-                    "Word Overlap": sim_metrics['word_overlap']
+                    "Question": i + 1,
+                    "Answer Sequence": answer_sim_metrics['sequence_similarity'],
+                    "Answer Cosine": answer_sim_metrics['cosine_similarity'],
+                    "Answer Word Overlap": answer_sim_metrics['word_overlap']
                 })
             
             df_sim = pd.DataFrame(similarity_types)
@@ -457,18 +295,19 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                 x='Question', y='Score', color='Similarity Type',
                 title="Similarity Scores by Type Across Questions"
             )
+            fig_line.update_layout(height=400)
             st.plotly_chart(fig_line, use_container_width=True)
     
     with tab3:
         if successful_tests:
             # Length analysis
             length_data = []
-            for result in successful_tests:
+            for i, result in enumerate(successful_tests):
                 length_metrics = result['length_metrics']
                 length_data.append({
-                    "Question": result['question_index'] + 1,
-                    "Stored Answer Length": length_metrics['text1_length'],
-                    "Generated Answer Length": length_metrics['text2_length'],
+                    "Question": i + 1,
+                    "Expected Length": length_metrics['text1_length'],
+                    "Generated Length": length_metrics['text2_length'],
                     "Length Ratio": length_metrics['length_ratio'],
                     "Length Difference %": length_metrics['length_diff_percentage']
                 })
@@ -478,8 +317,8 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             # Length comparison scatter plot
             fig_scatter = px.scatter(
                 df_length,
-                x="Stored Answer Length",
-                y="Generated Answer Length",
+                x="Expected Length",
+                y="Generated Length",
                 color="Length Ratio",
                 title="Answer Length Comparison",
                 hover_data=["Question", "Length Difference %"]
@@ -487,10 +326,11 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             fig_scatter.add_shape(
                 type="line",
                 x0=0, y0=0,
-                x1=max(df_length["Stored Answer Length"].max(), df_length["Generated Answer Length"].max()),
-                y1=max(df_length["Stored Answer Length"].max(), df_length["Generated Answer Length"].max()),
+                x1=max(df_length["Expected Length"].max(), df_length["Generated Length"].max()),
+                y1=max(df_length["Expected Length"].max(), df_length["Generated Length"].max()),
                 line=dict(dash="dash", color="red"),
             )
+            fig_scatter.update_layout(height=400)
             st.plotly_chart(fig_scatter, use_container_width=True)
             
             # Length ratio distribution
@@ -500,43 +340,174 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                 nbins=20,
                 title="Distribution of Length Ratios"
             )
+            fig_ratio.update_layout(height=300)
             st.plotly_chart(fig_ratio, use_container_width=True)
     
     with tab4:
-        # Detailed individual results
+        # Compact detailed individual results
         st.subheader("Individual Test Results")
         
-        for i, result in enumerate(successful_tests[:10]):  # Show first 10 detailed results
-            with st.expander(f"Question {result['question_index'] + 1}: {result['question'][:100]}..."):
-                col1, col2 = st.columns(2)
+        # Add filters
+        col1, col2 = st.columns(2)
+        with col1:
+            similarity_threshold = st.slider("Min Similarity Score", 0.0, 1.0, 0.0, 0.1, key="similarity_filter")
+        with col2:
+            show_count = st.selectbox("Show Results", [5, 10, 20, "All"], index=1, key="show_count_filter")
+        
+        # Filter results
+        filtered_results = [r for r in successful_tests if r['answer_similarity_metrics']['average_similarity'] >= similarity_threshold]
+        
+        if show_count != "All":
+            filtered_results = filtered_results[:show_count]
+        
+        for i, result in enumerate(filtered_results):
+            question_preview = result['question_text'][:80] + "..." if len(result['question_text']) > 80 else result['question_text']
+            
+            # Get similarity color
+            avg_sim = result['answer_similarity_metrics']['average_similarity']
+            sim_color = "🟢" if avg_sim >= 0.7 else "🟡" if avg_sim >= 0.5 else "🔴"
+            
+            with st.expander(f"{sim_color} Q{i+1} (Sim: {avg_sim:.3f}): {question_preview}", expanded=False):
+                # Compact metrics display
+                metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
                 
-                with col1:
-                    st.write("**📊 Similarity Metrics:**")
-                    sim_metrics = result['similarity_metrics']
-                    st.write(f"- Average: {sim_metrics['average_similarity']:.3f}")
-                    st.write(f"- Sequence: {sim_metrics['sequence_similarity']:.3f}")
-                    st.write(f"- Cosine: {sim_metrics['cosine_similarity']:.3f}")
-                    st.write(f"- Word Overlap: {sim_metrics['word_overlap']:.3f}")
-                    
-                    st.write("**📏 Length Metrics:**")
+                with metrics_col1:
+                    st.markdown("**📊 Similarity**")
+                    answer_sim = result['answer_similarity_metrics']
+                    st.write(f"• Avg: {answer_sim['average_similarity']:.3f}")
+                    st.write(f"• Cosine: {answer_sim['cosine_similarity']:.3f}")
+                    st.write(f"• Sequence: {answer_sim['sequence_similarity']:.3f}")
+                    st.write(f"• Word Overlap: {answer_sim['word_overlap']:.3f}")
+                
+                with metrics_col2:
+                    st.markdown("**📏 Length**")
                     len_metrics = result['length_metrics']
-                    st.write(f"- Length Ratio: {len_metrics['length_ratio']:.3f}")
-                    st.write(f"- Word Ratio: {len_metrics['word_ratio']:.3f}")
-                    st.write(f"- Length Diff %: {len_metrics['length_diff_percentage']:.1f}%")
+                    st.write(f"• Ratio: {len_metrics['length_ratio']:.3f}")
+                    st.write(f"• Word Ratio: {len_metrics['word_ratio']:.3f}")
+                    st.write(f"• Diff %: {len_metrics['length_diff_percentage']:.1f}%")
+                    st.write(f"• Expected: {len_metrics['text1_length']} chars")
+                    st.write(f"• Generated: {len_metrics['text2_length']} chars")
                 
-                with col2:
-                    st.write("**🎯 Sample Similarities:**")
+                with metrics_col3:
+                    st.markdown("**🎯 Samples**")
+                    sample_names = ["Beginning", "Middle", "End"]
                     for sample in result['sample_similarities']:
-                        sample_names = ["Beginning", "Middle", "End"]
-                        st.write(f"- {sample_names[sample['sample_index']]}: {sample['similarity']:.3f}")
+                        st.write(f"• {sample_names[sample['sample_index']]}: {sample['similarity']:.3f}")
                 
-                # Show text comparison
-                if st.checkbox(f"Show text comparison for Question {result['question_index'] + 1}"):
-                    st.write("**📝 Stored Answer:**")
-                    st.text_area("Stored", result['stored_answer'][:500] + "..." if len(result['stored_answer']) > 500 else result['stored_answer'], height=100, disabled=True, key=f"stored_{i}")
+                # Show full texts in collapsible sections
+                if st.checkbox(f"Show full content for Q{i+1}", key=f"show_content_{i}"):
+                    st.markdown("**❓ Question:**")
+                    st.text_area("", result['question_text'], height=60, disabled=True, key=f"question_{i}", label_visibility="collapsed")
                     
-                    st.write("**🤖 Generated Answer:**")
-                    st.text_area("Generated", result['generated_answer'][:500] + "..." if len(result['generated_answer']) > 500 else result['generated_answer'], height=100, disabled=True, key=f"generated_{i}")
+                    content_col1, content_col2 = st.columns(2)
+                    with content_col1:
+                        st.markdown("**📝 Expected Answer:**")
+                        st.text_area("", result['expected_answer'], height=200, disabled=True, key=f"expected_{i}", label_visibility="collapsed")
+                    
+                    with content_col2:
+                        st.markdown("**🤖 Generated Answer:**")
+                        st.text_area("", result['answer'], height=200, disabled=True, key=f"generated_{i}", label_visibility="collapsed")
+                    
+                    if result.get('expected_sources') or result.get('sources'):
+                        sources_col1, sources_col2 = st.columns(2)
+                        with sources_col1:
+                            st.markdown("**📚 Expected Sources:**")
+                            st.text_area("", result.get('expected_sources', 'N/A'), height=100, disabled=True, key=f"exp_sources_{i}", label_visibility="collapsed")
+                        
+                        with sources_col2:
+                            st.markdown("**🔗 Generated Sources:**")
+                            st.text_area("", result.get('sources', 'N/A'), height=100, disabled=True, key=f"gen_sources_{i}", label_visibility="collapsed")
+    
+    with tab5:
+        # New side-by-side comparison tab
+        st.subheader("📋 Side-by-Side Text Comparison")
+        
+        if successful_tests:
+            # Question selector
+            question_options = [f"Q{i+1}: {result['question_text'][:50]}..." for i, result in enumerate(successful_tests)]
+            selected_idx = st.selectbox("Select question to compare:", range(len(question_options)), format_func=lambda x: question_options[x])
+            
+            if selected_idx is not None:
+                result = successful_tests[selected_idx]
+                
+                # Display metrics for selected question
+                st.markdown("**📊 Similarity Metrics:**")
+                metrics_row1, metrics_row2, metrics_row3, metrics_row4 = st.columns(4)
+                
+                with metrics_row1:
+                    avg_sim = result['answer_similarity_metrics']['average_similarity']
+                    sim_color = "#28a745" if avg_sim >= 0.7 else "#ffc107" if avg_sim >= 0.5 else "#dc3545"
+                    st.metric("Average Similarity", f"{avg_sim:.3f}")
+                
+                with metrics_row2:
+                    st.metric("Cosine Similarity", f"{result['answer_similarity_metrics']['cosine_similarity']:.3f}")
+                
+                with metrics_row3:
+                    st.metric("Length Ratio", f"{result['length_metrics']['length_ratio']:.3f}")
+                
+                with metrics_row4:
+                    st.metric("Word Overlap", f"{result['answer_similarity_metrics']['word_overlap']:.3f}")
+                
+                st.markdown("---")
+                
+                # Question display
+                st.markdown("**❓ Question:**")
+                st.info(result['question_text'])
+                
+                # Side-by-side answer comparison
+                st.markdown("**📝 Answer Comparison:**")
+                answer_col1, answer_col2 = st.columns(2)
+                
+                with answer_col1:
+                    st.markdown("**Expected Answer**")
+                    expected_length = len(result['expected_answer'])
+                    st.caption(f"Length: {expected_length} characters, {len(result['expected_answer'].split())} words")
+                    st.text_area("", result['expected_answer'], height=300, disabled=True, key=f"side_expected_{selected_idx}", label_visibility="collapsed")
+                
+                with answer_col2:
+                    st.markdown("**Generated Answer**")
+                    generated_length = len(result['answer'])
+                    st.caption(f"Length: {generated_length} characters, {len(result['answer'].split())} words")
+                    st.text_area("", result['answer'], height=300, disabled=True, key=f"side_generated_{selected_idx}", label_visibility="collapsed")
+                
+                # Sources comparison (if available)
+                if result.get('expected_sources') or result.get('sources'):
+                    st.markdown("**📚 Sources Comparison:**")
+                    sources_col1, sources_col2 = st.columns(2)
+                    
+                    with sources_col1:
+                        st.markdown("**Expected Sources**")
+                        expected_sources = result.get('expected_sources', 'N/A')
+                        if expected_sources != 'N/A':
+                            st.caption(f"Length: {len(expected_sources)} characters")
+                        st.text_area("", expected_sources, height=150, disabled=True, key=f"side_exp_sources_{selected_idx}", label_visibility="collapsed")
+                    
+                    with sources_col2:
+                        st.markdown("**Generated Sources**")
+                        generated_sources = result.get('sources', 'N/A')
+                        if generated_sources != 'N/A':
+                            st.caption(f"Length: {len(generated_sources)} characters")
+                        st.text_area("", generated_sources, height=150, disabled=True, key=f"side_gen_sources_{selected_idx}", label_visibility="collapsed")
+                
+                # Text analysis section
+                st.markdown("**🔍 Text Analysis:**")
+                analysis_col1, analysis_col2 = st.columns(2)
+                
+                with analysis_col1:
+                    st.markdown("**Length Comparison**")
+                    length_diff = abs(len(result['expected_answer']) - len(result['answer']))
+                    length_diff_pct = result['length_metrics']['length_diff_percentage']
+                    st.write(f"• Difference: {length_diff} characters ({length_diff_pct:.1f}%)")
+                    st.write(f"• Length ratio: {result['length_metrics']['length_ratio']:.3f}")
+                    st.write(f"• Word ratio: {result['length_metrics']['word_ratio']:.3f}")
+                
+                with analysis_col2:
+                    st.markdown("**Sample Similarities**")
+                    sample_names = ["Beginning", "Middle", "End"]
+                    for sample in result['sample_similarities']:
+                        sample_sim = sample['similarity']
+                        sample_emoji = "🟢" if sample_sim >= 0.7 else "🟡" if sample_sim >= 0.5 else "🔴"
+                        st.write(f"{sample_emoji} {sample_names[sample['sample_index']]}: {sample_sim:.3f}")
     
     # Show failed tests if any
     if failed_tests:
