@@ -117,11 +117,11 @@ class RAGEvaluator:
         }
         
         # Evaluate relevance
-        #relevance_result = self.evaluate_relevance(query, response, context)
-        #results["relevance"] = relevance_result
+        relevance_result = self.evaluate_relevance(query, response, context)
+        results["relevance"] = relevance_result
         
         # Evaluate groundedness
-        #groundedness_result = self.evaluate_groundedness(response, context)
-        #results["groundedness"] = groundedness_result
+        groundedness_result = self.evaluate_groundedness(response, context)
+        results["groundedness"] = groundedness_result
         
         return results

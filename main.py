@@ -8,11 +8,11 @@ This module orchestrates the complete RAG evaluation process:
 3. Evaluate the response using Azure OpenAI evaluators
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 import json
 from rag_api_client import RAGApiClient
 from rag_evaluator import RAGEvaluator
-from indicators import calculate_text_similarity, calculate_length_comparison, extract_text_samples
+from indicators import calculate_text_similarity, calculate_length_comparison, extract_text_samples, ragas_evaluate
 from config import Config
 import streamlit as st
 
@@ -144,6 +144,23 @@ class RAGEvaluationPipeline:
                 "similarity": sample_sim["average_similarity"]
             })
         
+        # Add RAGAS evaluation
+        try:
+            ragas_result = self.ragas_evaluate([question_text], [answer], [expected_answer], [sources])
+            ragas_metrics = {
+                "context_recall": ragas_result.get('context_recall', 0.0),
+                "faithfulness": ragas_result.get('faithfulness', 0.0),
+                "factual_correctness": ragas_result.get('factual_correctness', 0.0)
+            }
+        except Exception as e:
+            print(f"Warning: RAGAS evaluation failed: {e}")
+            ragas_metrics = {
+                "context_recall": 0.0,
+                "faithfulness": 0.0,
+                "factual_correctness": 0.0,
+                "error": str(e)
+            }
+        
         # Compile comprehensive results
         automated_result = {
             "question_text": question_text,
@@ -157,9 +174,17 @@ class RAGEvaluationPipeline:
             "length_metrics": length_metrics,
             "sources_length_metrics": sources_length_metrics,
             "sample_similarities": sample_similarities,
+            "ragas_metrics": ragas_metrics,
         }
         
         return automated_result
+    
+    def ragas_evaluate(self, questions: List[str], answers: List[str], expected_answers: List[str], sources: List[str]) -> Dict[str, Any]:
+        """
+        Evaluate the answer using RAGAS
+        """
+        st.write(f"Evaluating RAGAS for question: ragas_evaluate {type(sources)}")
+        return ragas_evaluate(questions, answers, expected_answers, sources)
 
 def main():
     """Main function for running RAG evaluation"""

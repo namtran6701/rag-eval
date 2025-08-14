@@ -13,8 +13,6 @@ import plotly.express as px
 from typing import Dict, Any, List
 from components.utils import get_batch_data
 
-from components.utils import display_indicator_interpretation_guide
-
 def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
     """
     Display the automated testing interface
@@ -26,7 +24,6 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
         List of automated test results
     """
     st.header("🧪 Automated Testing")
-    display_indicator_interpretation_guide()
     
     # Get batch data
     questions, answers, sources = get_batch_data()
@@ -83,11 +80,11 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
             help="Sequential mode is faster but uses more resources"
         )
         
-    # Test a single question
     if st.button("Test single question (first)"):
         if len(questions) > 0:
             test_result = pipeline.automated_evaluate_question(questions[0], answers[0], sources[0])
             display_automated_test_results([test_result])
+        
     
     # Show test preview
     st.subheader("📋 Test Preview")
@@ -220,7 +217,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
     failed_tests = [r for r in results if "error" in r]
     
     # Summary metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
         st.metric("Total Tests", len(results))
     with col2:
@@ -233,15 +230,28 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             st.metric("Avg Similarity", f"{avg_similarity:.3f}")
         else:
             st.metric("Avg Similarity", "N/A")
+    with col5:
+        if successful_tests:
+            avg_faithfulness = np.mean([r.get('ragas_metrics', {}).get('faithfulness', 0.0) for r in successful_tests])
+            st.metric("Avg Faithfulness", f"{avg_faithfulness:.3f}")
+        else:
+            st.metric("Avg Faithfulness", "N/A")
+    with col6:
+        if successful_tests:
+            avg_factual = np.mean([r.get('ragas_metrics', {}).get('factual_correctness', 0.0) for r in successful_tests])
+            st.metric("Avg Factual Correctness", f"{avg_factual:.3f}")
+        else:
+            st.metric("Avg Factual Correctness", "N/A")
     
     # Detailed results tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "📈 Similarity Analysis", "📏 Length Analysis", "🔍 Detailed Results", "📋 Side-by-Side Comparison"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Overview", "📈 Similarity Analysis", "📏 Length Analysis", "🎯 RAGAS Analysis", "🔍 Detailed Results", "📋 Side-by-Side Comparison"])
     
     with tab1:
         if successful_tests:
             # Create overview dataframe
             overview_data = []
             for i, result in enumerate(successful_tests):
+                ragas_metrics = result.get('ragas_metrics', {})
                 overview_data.append({
                     "Question #": i + 1,
                     "Avg Similarity": f"{result['answer_similarity_metrics']['average_similarity']:.3f}",
@@ -249,7 +259,10 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     "Word Ratio": f"{result['length_metrics']['word_ratio']:.3f}",
                     "Cosine Sim": f"{result['answer_similarity_metrics']['cosine_similarity']:.3f}",
                     "Sequence Sim": f"{result['answer_similarity_metrics']['sequence_similarity']:.3f}",
-                    "Word Overlap": f"{result['answer_similarity_metrics']['word_overlap']:.3f}"
+                    "Word Overlap": f"{result['answer_similarity_metrics']['word_overlap']:.3f}",
+                    "Context Recall": f"{ragas_metrics.get('context_recall', 0.0):.3f}",
+                    "Faithfulness": f"{ragas_metrics.get('faithfulness', 0.0):.3f}",
+                    "Factual Correctness": f"{ragas_metrics.get('factual_correctness', 0.0):.3f}"
                 })
             
             df_overview = pd.DataFrame(overview_data)
@@ -344,6 +357,97 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             st.plotly_chart(fig_ratio, use_container_width=True)
     
     with tab4:
+        # RAGAS Analysis Tab
+        if successful_tests:
+            st.subheader("🎯 RAGAS Metrics Analysis")
+            
+            # RAGAS metrics distribution
+            ragas_data = []
+            for i, result in enumerate(successful_tests):
+                ragas_metrics = result.get('ragas_metrics', {})
+                if 'error' not in ragas_metrics:
+                    ragas_data.append({
+                        "Question": i + 1,
+                        "Context Recall": ragas_metrics.get('context_recall', 0.0),
+                        "Faithfulness": ragas_metrics.get('faithfulness', 0.0),
+                        "Factual Correctness": ragas_metrics.get('factual_correctness', 0.0)
+                    })
+            
+            if ragas_data:
+                df_ragas = pd.DataFrame(ragas_data)
+                
+                # RAGAS metrics line chart
+                fig_ragas_line = px.line(
+                    df_ragas.melt(id_vars=['Question'], var_name='RAGAS Metric', value_name='Score'),
+                    x='Question', y='Score', color='RAGAS Metric',
+                    title="RAGAS Metrics Across Questions",
+                    labels={"Score": "RAGAS Score (0-1)", "Question": "Question Number"}
+                )
+                fig_ragas_line.update_layout(height=400)
+                st.plotly_chart(fig_ragas_line, use_container_width=True)
+                
+                # RAGAS metrics distribution histograms
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    fig_context = px.histogram(
+                        df_ragas, x="Context Recall", nbins=10,
+                        title="Context Recall Distribution"
+                    )
+                    fig_context.update_layout(height=300)
+                    st.plotly_chart(fig_context, use_container_width=True)
+                
+                with col2:
+                    fig_faith = px.histogram(
+                        df_ragas, x="Faithfulness", nbins=10,
+                        title="Faithfulness Distribution"
+                    )
+                    fig_faith.update_layout(height=300)
+                    st.plotly_chart(fig_faith, use_container_width=True)
+                
+                with col3:
+                    fig_factual = px.histogram(
+                        df_ragas, x="Factual Correctness", nbins=10,
+                        title="Factual Correctness Distribution"
+                    )
+                    fig_factual.update_layout(height=300)
+                    st.plotly_chart(fig_factual, use_container_width=True)
+                
+                # RAGAS vs Similarity correlation
+                similarity_scores = [r['answer_similarity_metrics']['average_similarity'] for r in successful_tests if 'error' not in r.get('ragas_metrics', {})]
+                faithfulness_scores = [r.get('ragas_metrics', {}).get('faithfulness', 0.0) for r in successful_tests if 'error' not in r.get('ragas_metrics', {})]
+                
+                if len(similarity_scores) == len(faithfulness_scores) and len(similarity_scores) > 0:
+                    correlation_data = pd.DataFrame({
+                        "Similarity Score": similarity_scores,
+                        "Faithfulness": faithfulness_scores,
+                        "Question": list(range(1, len(similarity_scores) + 1))
+                    })
+                    
+                    fig_corr = px.scatter(
+                        correlation_data,
+                        x="Similarity Score", y="Faithfulness",
+                        title="Similarity vs RAGAS Faithfulness Correlation",
+                        hover_data=["Question"]
+                    )
+                    fig_corr.update_layout(height=400)
+                    st.plotly_chart(fig_corr, use_container_width=True)
+                    
+                    # Calculate and display correlation coefficient
+                    correlation = np.corrcoef(similarity_scores, faithfulness_scores)[0, 1]
+                    st.info(f"📊 Correlation between Similarity and Faithfulness: {correlation:.3f}")
+            
+            else:
+                st.warning("⚠️ No valid RAGAS metrics found. This might indicate RAGAS evaluation errors.")
+                
+                # Show RAGAS errors if any
+                ragas_errors = [r.get('ragas_metrics', {}).get('error') for r in successful_tests if 'error' in r.get('ragas_metrics', {})]
+                if ragas_errors:
+                    st.error("RAGAS Evaluation Errors:")
+                    for i, error in enumerate(ragas_errors):
+                        st.write(f"Question {i+1}: {error}")
+    
+    with tab5:
         # Compact detailed individual results
         st.subheader("Individual Test Results")
         
@@ -369,7 +473,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             
             with st.expander(f"{sim_color} Q{i+1} (Sim: {avg_sim:.3f}): {question_preview}", expanded=False):
                 # Compact metrics display
-                metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+                metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
                 
                 with metrics_col1:
                     st.markdown("**📊 Similarity**")
@@ -389,6 +493,16 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     st.write(f"• Generated: {len_metrics['text2_length']} chars")
                 
                 with metrics_col3:
+                    st.markdown("**🎯 RAGAS**")
+                    ragas_metrics = result.get('ragas_metrics', {})
+                    if 'error' in ragas_metrics:
+                        st.write(f"❌ Error: {ragas_metrics['error'][:30]}...")
+                    else:
+                        st.write(f"• Context Recall: {ragas_metrics.get('context_recall', 0.0):.3f}")
+                        st.write(f"• Faithfulness: {ragas_metrics.get('faithfulness', 0.0):.3f}")
+                        st.write(f"• Factual Correct: {ragas_metrics.get('factual_correctness', 0.0):.3f}")
+                
+                with metrics_col4:
                     st.markdown("**🎯 Samples**")
                     sample_names = ["Beginning", "Middle", "End"]
                     for sample in result['sample_similarities']:
@@ -418,7 +532,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                             st.markdown("**🔗 Generated Sources:**")
                             st.text_area("", result.get('sources', 'N/A'), height=100, disabled=True, key=f"gen_sources_{i}", label_visibility="collapsed")
     
-    with tab5:
+    with tab6:
         # New side-by-side comparison tab
         st.subheader("📋 Side-by-Side Text Comparison")
         
@@ -431,8 +545,8 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                 result = successful_tests[selected_idx]
                 
                 # Display metrics for selected question
-                st.markdown("**📊 Similarity Metrics:**")
-                metrics_row1, metrics_row2, metrics_row3, metrics_row4 = st.columns(4)
+                st.markdown("**📊 Evaluation Metrics:**")
+                metrics_row1, metrics_row2, metrics_row3, metrics_row4, metrics_row5, metrics_row6 = st.columns(6)
                 
                 with metrics_row1:
                     avg_sim = result['answer_similarity_metrics']['average_similarity']
@@ -447,6 +561,15 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                 
                 with metrics_row4:
                     st.metric("Word Overlap", f"{result['answer_similarity_metrics']['word_overlap']:.3f}")
+                
+                with metrics_row5:
+                    ragas_metrics = result.get('ragas_metrics', {})
+                    faithfulness = ragas_metrics.get('faithfulness', 0.0) if 'error' not in ragas_metrics else 0.0
+                    st.metric("Faithfulness", f"{faithfulness:.3f}")
+                
+                with metrics_row6:
+                    factual_correctness = ragas_metrics.get('factual_correctness', 0.0) if 'error' not in ragas_metrics else 0.0
+                    st.metric("Factual Correctness", f"{factual_correctness:.3f}")
                 
                 st.markdown("---")
                 
