@@ -39,23 +39,16 @@ def parse_sources_to_formatted_list(sources_string: str) -> list:
         if cleaned_string.startswith(prefix):
             cleaned_string = cleaned_string[len(prefix):].strip()
     
-    st.write(f"Original string: {sources_string[:100]}...")
-    st.write(f"Cleaned string: {cleaned_string[:100]}...")
-    
     try:
         # Strategy 1: Try to parse as JSON first
         try:
             sources_dict = json.loads(cleaned_string)
-            st.write("Successfully parsed as JSON")
         except json.JSONDecodeError as json_error:
-            st.write(f"JSON parsing failed: {json_error}")
             
             # Strategy 2: Try to evaluate as Python literal
             try:
                 sources_dict = ast.literal_eval(cleaned_string)
-                st.write("Successfully parsed as Python literal")
             except (ValueError, SyntaxError) as ast_error:
-                st.write(f"Python literal parsing failed: {ast_error}")
                 
                 # Strategy 3: Try to fix common JSON issues
                 try:
@@ -72,12 +65,9 @@ def parse_sources_to_formatted_list(sources_string: str) -> list:
                         if last_complete_brace > 0:
                             json_fixed = json_fixed[:last_complete_brace + 1]
                     
-                    st.write(f"Attempting to parse fixed JSON: {json_fixed[:100]}...")
                     sources_dict = json.loads(json_fixed)
-                    st.write("Successfully parsed fixed JSON")
                     
                 except json.JSONDecodeError as fixed_error:
-                    st.write(f"Fixed JSON parsing failed: {fixed_error}")
                     
                     # Strategy 4: Try to extract partial data using regex
                     import re
@@ -87,15 +77,13 @@ def parse_sources_to_formatted_list(sources_string: str) -> list:
                     matches = re.findall(doc_pattern, cleaned_string)
                     
                     if matches:
-                        st.write(f"Found {len(matches)} documents using regex")
                         formatted_documents = []
                         for content, source in matches:
-                            formatted_doc = f"{content}\nSource: {source}\n{'=' * 30}"
+                            formatted_doc = f"{content}\nSource: {source}\n\n{'=' * 30}\n\n"
                             formatted_documents.append(formatted_doc)
                         return formatted_documents
                     else:
                         # Strategy 5: Try to extract any content and source pairs we can find
-                        st.write("Attempting to extract partial data...")
                         
                         # Look for any content patterns
                         content_pattern = r"'content':\s*'([^']*)'"
@@ -105,7 +93,6 @@ def parse_sources_to_formatted_list(sources_string: str) -> list:
                         source_matches = re.findall(source_pattern, cleaned_string)
                         
                         if content_matches and source_matches:
-                            st.write(f"Found {len(content_matches)} content matches and {len(source_matches)} source matches")
                             
                             # Pair them up (assuming they're in order)
                             formatted_documents = []
@@ -119,14 +106,12 @@ def parse_sources_to_formatted_list(sources_string: str) -> list:
                                 return formatted_documents
                         
                         # Strategy 6: Last resort - try to extract any readable content
-                        st.write("Attempting to extract any readable content...")
                         
                         # Look for any text that looks like content
                         text_pattern = r"'([^']{50,})'"  # Any quoted string with at least 50 characters
                         text_matches = re.findall(text_pattern, cleaned_string)
                         
                         if text_matches:
-                            st.write(f"Found {len(text_matches)} potential text matches")
                             formatted_documents = []
                             for i, text in enumerate(text_matches[:5]):  # Limit to first 5
                                 formatted_doc = f"{text}\nSource: Unknown\n{'=' * 30}"
@@ -149,14 +134,13 @@ def parse_sources_to_formatted_list(sources_string: str) -> list:
                         source = doc['source'].strip()
                         
                         # Format the document as requested
-                        formatted_doc = f"{content}\nSource: {source}\n{'=' * 30}"
+                        formatted_doc = f"{content}\nSource: {source}\n{'=' * 30} \n Content: \n"
                         formatted_documents.append(formatted_doc)
         
         return formatted_documents
         
     except Exception as e:
         # If parsing fails completely, return an error message
-        st.write(f"Final parsing error: {str(e)}")
         return [f"Error parsing sources: {str(e)}\n{'=' * 30}"]
 
 

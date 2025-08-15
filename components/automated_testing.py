@@ -81,11 +81,23 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
             help="Sequential mode is faster but uses more resources"
         )
         
-    if st.button("Test single question (first)"):
-        if len(questions) > 0:
-            with st.spinner("Testing single question..."):
+    # Single question testing section
+    st.subheader("🔬 Single Question Testing")
+    
+    # Create question selector
+    question_options = [f"Q{i+1}: {questions[i][:80]}..." for i in range(len(questions))]
+    selected_question_idx = st.selectbox(
+        "Select a question to test:",
+        options=range(len(questions)),
+        format_func=lambda x: question_options[x] if x < len(question_options) else f"Q{x+1}",
+        index=0
+    )
+    
+    if st.button("Test selected question"):
+        if len(questions) > 0 and selected_question_idx < len(questions):
+            with st.spinner(f"Testing question {selected_question_idx + 1}..."):
                 # Get individual test result (without RAGAS)
-                test_result = pipeline.automated_evaluate_question(questions[0], answers[0], sources[0])
+                test_result = pipeline.automated_evaluate_question(questions[selected_question_idx], answers[selected_question_idx], sources[selected_question_idx])
                 
                 # Perform RAGAS evaluation for the single question
                 if "error" not in test_result:

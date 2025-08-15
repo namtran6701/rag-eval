@@ -126,8 +126,8 @@ class RAGEvaluationPipeline:
         answer = rag_data.get("answer", "")
         sources_raw = rag_data.get("sources", "")
         sources_formatted = parse_sources_to_formatted_list(sources_raw)
-        sources_formatted = '/ Content: '.join(sources_formatted)
-        sources_formatted = sources_formatted.replace("Content", '\n Content: ')
+        sources_formatted = '\n'.join(sources_formatted)
+        sources_formatted = '/\nContent: \n' + sources_formatted
             
         
         # Compare the provided question with the batch question
