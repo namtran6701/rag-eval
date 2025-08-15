@@ -321,7 +321,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
     failed_tests = [r for r in results if "error" in r]
     
     # Summary metrics
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
     with col1:
         st.metric("Total Tests", len(results))
     with col2:
@@ -364,6 +364,17 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     st.metric("Avg Factual Correctness", "N/A")
         else:
             st.metric("Avg Factual Correctness", "N/A")
+    with col7:
+        if successful_tests:
+            # Calculate average local sources alignment
+            tests_with_local_metrics = [r for r in successful_tests if 'local_sources_metrics' in r]
+            if tests_with_local_metrics:
+                avg_local_alignment = np.mean([r['local_sources_metrics']['alignment_score'] for r in tests_with_local_metrics])
+                st.metric("Avg Local Sources Alignment", f"{avg_local_alignment:.3f}")
+            else:
+                st.metric("Avg Local Sources Alignment", "N/A")
+        else:
+            st.metric("Avg Local Sources Alignment", "N/A")
     
     # Detailed results tabs
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Overview", "📈 Similarity Analysis", "📏 Length Analysis", "🎯 RAGAS Analysis", "🔍 Detailed Results", "📋 Side-by-Side Comparison"])
@@ -615,8 +626,8 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             sim_color = "🟢" if avg_sim >= 0.7 else "🟡" if avg_sim >= 0.5 else "🔴"
             
             with st.expander(f"{sim_color} Q{i+1} (Sim: {avg_sim:.3f}): {question_preview}", expanded=False):
-                # Compact metrics display
-                metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
+                                # Compact metrics display
+                metrics_col1, metrics_col2, metrics_col3, metrics_col4, metrics_col5 = st.columns(5)
                 
                 with metrics_col1:
                     st.markdown("**📊 Similarity**")
@@ -625,7 +636,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     st.write(f"• Cosine: {answer_sim['cosine_similarity']:.3f}")
                     st.write(f"• Sequence: {answer_sim['sequence_similarity']:.3f}")
                     st.write(f"• Word Overlap: {answer_sim['word_overlap']:.3f}")
-                
+
                 with metrics_col2:
                     st.markdown("**📏 Length**")
                     len_metrics = result['length_metrics']
@@ -634,8 +645,24 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     st.write(f"• Diff %: {len_metrics['length_diff_percentage']:.1f}%")
                     st.write(f"• Expected: {len_metrics['text1_length']} chars")
                     st.write(f"• Generated: {len_metrics['text2_length']} chars")
-                
+
                 with metrics_col3:
+                    st.markdown("**🏠 Local Sources**")
+                    local_metrics = result.get('local_sources_metrics', {})
+                    gen_metrics = local_metrics.get('generated_metrics', {})
+                    exp_metrics = local_metrics.get('expected_metrics', {})
+                    alignment_score = local_metrics.get('alignment_score', 0.0)
+                    
+                    st.write(f"• Alignment: {alignment_score:.3f}")
+                    st.write(f"• Generated: {gen_metrics.get('source_type', 'N/A')}")
+                    st.write(f"• Expected: {exp_metrics.get('source_type', 'N/A')}")
+                    
+                    if local_metrics.get('source_mismatch', False):
+                        st.write("⚠️ Source type mismatch")
+                    else:
+                        st.write("✅ Source types match")
+
+                with metrics_col4:
                     st.markdown("**🎯 RAGAS**")
                     ragas_metrics = result.get('ragas_metrics', {})
                     if ragas_metrics.get('pending', False):
@@ -647,7 +674,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                         st.write(f"• Faithfulness: {ragas_metrics.get('faithfulness', 0.0):.3f}")
                         st.write(f"• Factual Correct: {ragas_metrics.get('factual_correctness', 0.0):.3f}")
                 
-                with metrics_col4:
+                with metrics_col5:
                     st.markdown("**🎯 Samples**")
                     sample_names = ["Beginning", "Middle", "End"]
                     for sample in result['sample_similarities']:
@@ -691,7 +718,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                 
                 # Display metrics for selected question
                 st.markdown("**📊 Evaluation Metrics:**")
-                metrics_row1, metrics_row2, metrics_row3, metrics_row4, metrics_row5, metrics_row6 = st.columns(6)
+                metrics_row1, metrics_row2, metrics_row3, metrics_row4, metrics_row5, metrics_row6, metrics_row7 = st.columns(7)
                 
                 with metrics_row1:
                     avg_sim = result['answer_similarity_metrics']['average_similarity']
@@ -724,6 +751,11 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                         factual_correctness = f"{factual_correctness:.3f}" if isinstance(factual_correctness, (int, float)) else str(factual_correctness)
                     st.metric("Factual Correctness", factual_correctness)
                 
+                with metrics_row7:
+                    local_metrics = result.get('local_sources_metrics', {})
+                    alignment_score = local_metrics.get('alignment_score', 0.0)
+                    st.metric("Local Sources Alignment", f"{alignment_score:.3f}")
+                
                 st.markdown("---")
                 
                 # Question display
@@ -745,6 +777,41 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     generated_length = len(result['answer'])
                     st.caption(f"Length: {generated_length} characters, {len(result['answer'].split())} words")
                     st.text_area("", result['answer'], height=300, disabled=True, key=f"side_generated_{selected_idx}", label_visibility="collapsed")
+                
+                # Local Sources Analysis
+                st.markdown("---")
+                st.markdown("**🏠 Local Sources Analysis:**")
+                local_metrics = result.get('local_sources_metrics', {})
+                if local_metrics:
+                    comparison_analysis = local_metrics.get('comparison_analysis', 'No analysis available')
+                    st.info(comparison_analysis)
+                    
+                    # Show detailed breakdown
+                    local_col1, local_col2 = st.columns(2)
+                    
+                    with local_col1:
+                        st.markdown("**Expected Answer Sources:**")
+                        exp_metrics = local_metrics.get('expected_metrics', {})
+                        exp_type = exp_metrics.get('source_type', 'N/A')
+                        exp_count = exp_metrics.get('local_sources_count', 0)
+                        exp_analysis = exp_metrics.get('analysis', 'No analysis available')
+                        
+                        st.write(f"**Source Type:** {exp_type}")
+                        st.write(f"**Local Identifier Count:** {exp_count}")
+                        st.write(f"**Analysis:** {exp_analysis}")
+                    
+                    with local_col2:
+                        st.markdown("**Generated Answer Sources:**")
+                        gen_metrics = local_metrics.get('generated_metrics', {})
+                        gen_type = gen_metrics.get('source_type', 'N/A')
+                        gen_count = gen_metrics.get('local_sources_count', 0)
+                        gen_analysis = gen_metrics.get('analysis', 'No analysis available')
+                        
+                        st.write(f"**Source Type:** {gen_type}")
+                        st.write(f"**Local Identifier Count:** {gen_count}")
+                        st.write(f"**Analysis:** {gen_analysis}")
+                else:
+                    st.warning("Local sources metrics not available for this result.")
                 
                 # Sources comparison (if available)
                 if result.get('expected_sources') or result.get('sources'):

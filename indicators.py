@@ -133,6 +133,97 @@ def extract_text_samples(text: str, sample_size: int = 200) -> List[str]:
     return samples
 
 
+def calculate_local_sources_usage(text: str) -> Dict[str, Any]:
+    """
+    Calculate how much local sources are being used instead of external sources.
+    Searches for the specific identifier 'strag0vm2b2htvuuclm' in the text.
+    
+    Args:
+        text: The text to analyze (generated response)
+        
+    Returns:
+        Dictionary with local sources usage metrics
+    """
+    if not text or not isinstance(text, str):
+        return {
+            "has_local_sources": False,
+            "local_sources_count": 0,
+            "local_sources_score": 0.0,
+            "source_type": "external",
+            "analysis": "No text provided for analysis"
+        }
+    
+    # Clean the text for analysis
+    text_clean = text.strip()
+    
+    # Search for the local sources identifier
+    local_identifier = "strag0vm2b2htvuuclm"
+    local_sources_count = text_clean.count(local_identifier)
+    has_local_sources = local_sources_count > 0
+    
+    # Calculate a score (1.0 if local sources found, 0.0 if not)
+    local_sources_score = 1.0 if has_local_sources else 0.0
+    
+    # Determine source type
+    source_type = "local" if has_local_sources else "external"
+    
+    # Create analysis text
+    if has_local_sources:
+        analysis = f"Local sources detected ({local_sources_count} occurrence(s)). Answer appears to use internal/local data sources."
+    else:
+        analysis = "No local sources identifier found. Answer may be using external/internet data sources."
+    
+    return {
+        "has_local_sources": has_local_sources,
+        "local_sources_count": local_sources_count,
+        "local_sources_score": local_sources_score,
+        "source_type": source_type,
+        "analysis": analysis
+    }
+
+
+def compare_local_sources_usage(generated_text: str, expected_text: str) -> Dict[str, Any]:
+    """
+    Compare local sources usage between generated and expected answers.
+    
+    Args:
+        generated_text: The generated response text
+        expected_text: The expected response text
+        
+    Returns:
+        Dictionary with comparison metrics
+    """
+    generated_metrics = calculate_local_sources_usage(generated_text)
+    expected_metrics = calculate_local_sources_usage(expected_text)
+    
+    # Calculate alignment score
+    both_local = generated_metrics["has_local_sources"] and expected_metrics["has_local_sources"]
+    both_external = not generated_metrics["has_local_sources"] and not expected_metrics["has_local_sources"]
+    alignment_score = 1.0 if (both_local or both_external) else 0.0
+    
+    # Determine if there's a significant difference
+    source_mismatch = generated_metrics["source_type"] != expected_metrics["source_type"]
+    
+    # Create comparison analysis
+    if both_local:
+        comparison_analysis = "✅ Both answers use local sources - Good alignment"
+    elif both_external:
+        comparison_analysis = "⚠️ Both answers use external sources - Consider if local sources should be used"
+    elif generated_metrics["has_local_sources"] and not expected_metrics["has_local_sources"]:
+        comparison_analysis = "🔄 Generated answer uses local sources while expected uses external - May indicate improved source usage"
+    else:
+        comparison_analysis = "❌ Generated answer uses external sources while expected uses local - Potential source quality issue"
+    
+    return {
+        "generated_metrics": generated_metrics,
+        "expected_metrics": expected_metrics,
+        "alignment_score": alignment_score,
+        "source_mismatch": source_mismatch,
+        "comparison_analysis": comparison_analysis,
+        "local_sources_alignment": alignment_score
+    }
+
+
 def ragas_evaluate(questions: List[str], answers: List[str], expected_answers: List[str], sources: List[str]) -> Dict[str, Any]:
     """
     Evaluate the answer using RAGAS

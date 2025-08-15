@@ -12,7 +12,7 @@ from typing import Dict, Any, List
 import json
 from rag_api_client import RAGApiClient
 from rag_evaluator import RAGEvaluator
-from indicators import calculate_text_similarity, calculate_length_comparison, extract_text_samples, ragas_evaluate
+from indicators import calculate_text_similarity, calculate_length_comparison, extract_text_samples, ragas_evaluate, compare_local_sources_usage
 from config import Config
 from components.utils import parse_sources_to_formatted_list
 import streamlit as st
@@ -153,6 +153,9 @@ class RAGEvaluationPipeline:
                 "similarity": sample_sim["average_similarity"]
             })
         
+        # Calculate local sources usage comparison
+        local_sources_metrics = compare_local_sources_usage(answer, expected_answer)
+        
         # RAGAS evaluation will be done at batch level for efficiency
         ragas_metrics = {
             "context_recall": 0.0,
@@ -175,6 +178,7 @@ class RAGEvaluationPipeline:
             "length_metrics": length_metrics,
             "sources_length_metrics": sources_length_metrics,
             "sample_similarities": sample_similarities,
+            "local_sources_metrics": local_sources_metrics,
             "ragas_metrics": ragas_metrics,
         }
         

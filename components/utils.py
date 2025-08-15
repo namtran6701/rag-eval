@@ -298,7 +298,7 @@ def display_indicator_interpretation_guide():
     st.header("📊 How to Interpret Evaluation Indicators")
     
     # Create tabs for different types of indicators
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Similarity Metrics", "📏 Length Metrics", "🔍 RAGAS Metrics", "🎯 Overall Guidance"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Similarity Metrics", "📏 Length Metrics", "🔍 RAGAS Metrics", "🏠 Local Sources Metrics", "🎯 Overall Guidance"])
     
     with tab1:
         st.subheader("Text Similarity Indicators")
@@ -435,6 +435,70 @@ def display_indicator_interpretation_guide():
         """)
     
     with tab4:
+        st.subheader("🏠 Local Sources Usage Indicators")
+        st.write("Local Sources metrics help identify whether answers are using internal/local data sources versus external/internet sources. This is measured by searching for a specific identifier ('strag0vm2b2htvuuclm') in the response text.")
+        
+        # Local Sources metrics table
+        local_sources_data = {
+            "Metric": ["Local Sources Alignment", "Generated Source Type", "Expected Source Type", "Source Type Match"],
+            "Description": [
+                "Alignment score between generated and expected source usage (0.0 or 1.0)",
+                "Whether the generated answer uses 'local' or 'external' sources", 
+                "Whether the expected answer uses 'local' or 'external' sources",
+                "Boolean indicating if both answers use the same source type"
+            ],
+            "Perfect (1.0)": [
+                "✅ Both answers use same source type",
+                "✅ Uses local sources when expected",
+                "✅ Reference uses local sources",
+                "✅ Source types match perfectly"
+            ],
+            "Mismatch (0.0)": [
+                "❌ Different source types used",
+                "⚠️ Uses external when local expected",
+                "📋 Reference baseline",
+                "❌ Source types don't match"
+            ]
+        }
+        
+        df_local_sources = pd.DataFrame(local_sources_data)
+        st.dataframe(df_local_sources, use_container_width=True)
+        
+        # Local Sources interpretation guidance
+        st.write("**🎯 Local Sources Interpretation Guidelines:**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success("**Alignment Score = 1.0**\nBoth answers use the same source type")
+        with col2:
+            st.error("**Alignment Score = 0.0**\nAnswers use different source types")
+        
+        # Local Sources best practices
+        st.write("**💡 Local Sources Best Practices:**")
+        st.info("""
+        • **Alignment Score of 1.0** indicates consistent source usage patterns
+        • **Local sources** are preferred when available as they indicate use of internal knowledge
+        • **External sources** may indicate the system is using internet data instead of local knowledge
+        • Monitor for patterns where expected answers use local sources but generated answers use external sources
+        """)
+        
+        # Local Sources red flags
+        st.write("**🚨 Local Sources Red Flags:**")
+        st.error("""
+        • **Alignment Score = 0.0**: Inconsistent source usage between expected and generated answers
+        • **Generated = external, Expected = local**: System may not be accessing internal knowledge properly
+        • **High frequency of external sources**: May indicate over-reliance on internet data
+        """)
+        
+        # Source type explanations
+        st.write("**📋 Source Type Definitions:**")
+        st.markdown("""
+        - **Local Sources**: Answers containing the identifier 'strag0vm2b2htvuuclm', indicating use of internal/local data
+        - **External Sources**: Answers without the identifier, potentially indicating use of external/internet data
+        - **Alignment Score**: Binary score (0.0 or 1.0) indicating whether both answers use the same source type
+        """)
+    
+    with tab5:
         st.subheader("🎯 Overall Interpretation Guidelines")
         
         # RAG-specific guidance
@@ -443,6 +507,8 @@ def display_indicator_interpretation_guide():
         • **Similarity scores above 0.6** generally indicate good alignment between expected and actual answers
         • **Length ratios above 0.7** suggest appropriately sized responses  
         • **Length difference percentages below 30%** indicate reasonable response sizing
+        • **Local Sources Alignment of 1.0** indicates consistent source usage patterns
+        • **RAGAS scores above 0.7** suggest high-quality RAG performance
         """)
         
         # Red flags
@@ -451,6 +517,8 @@ def display_indicator_interpretation_guide():
         • **Average similarity below 0.3** suggests poor answer quality
         • **Length ratio below 0.3** might indicate truncated or overly verbose responses
         • **Length difference percentage above 70%** could indicate significant sizing issues
+        • **Local Sources Alignment of 0.0** indicates inconsistent source usage patterns
+        • **Multiple external sources when local expected** may indicate knowledge access issues
         """)
         
         # Best practices
@@ -460,6 +528,8 @@ def display_indicator_interpretation_guide():
         • Cross-reference individual metrics to understand why a score might be high or low
         • **High word overlap but low cosine similarity** might indicate keyword matching without semantic understanding
         • **High sequence similarity but low word overlap** might indicate similar structure but different content
+        • **Monitor Local Sources Alignment** to ensure consistent source usage patterns
+        • **Investigate mismatched source types** to understand if the system is accessing the right knowledge base
         """)
         
         # Score interpretation scale
