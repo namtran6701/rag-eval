@@ -108,7 +108,7 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
                             [test_result['question_text']], 
                             [test_result['answer']], 
                             [test_result['expected_answer']], 
-                            [test_result['sources']]
+                            test_result['sources_formatted_list']
                         )
                         
                         # Map RAGAS results back to the test result
@@ -221,8 +221,9 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
                             ragas_questions = [r['question_text'] for r in successful_results]
                             ragas_answers = [r['answer'] for r in successful_results]
                             ragas_expected_answers = [r['expected_answer'] for r in successful_results]
-                            ragas_sources = [r['sources'] for r in successful_results]
-                            
+                            ragas_sources = []
+                            for r in successful_results:
+                                ragas_sources.extend(r['sources_formatted_list'])
                             # Run batch RAGAS evaluation
                             ragas_result = ragas_evaluate(ragas_questions, ragas_answers, ragas_expected_answers, ragas_sources)
                             

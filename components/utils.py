@@ -298,7 +298,7 @@ def display_indicator_interpretation_guide():
     st.header("📊 How to Interpret Evaluation Indicators")
     
     # Create tabs for different types of indicators
-    tab1, tab2, tab3 = st.tabs(["📈 Similarity Metrics", "📏 Length Metrics", "🎯 Overall Guidance"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Similarity Metrics", "📏 Length Metrics", "🔍 RAGAS Metrics", "🎯 Overall Guidance"])
     
     with tab1:
         st.subheader("Text Similarity Indicators")
@@ -368,6 +368,73 @@ def display_indicator_interpretation_guide():
         st.dataframe(df_length_bad, use_container_width=True)
     
     with tab3:
+        st.subheader("RAGAS Evaluation Metrics")
+        st.write("RAGAS (RAG Assessment) metrics provide specialized evaluation for Retrieval-Augmented Generation systems. All scores range from **0.0 to 1.0**, where higher values indicate better performance.")
+        
+        # RAGAS metrics table
+        ragas_data = {
+            "Metric": ["Context Recall", "Faithfulness", "Factual Correctness"],
+            "Description": [
+                "Measures how well the retrieved context covers the information needed to answer the question",
+                "Evaluates whether the generated answer is faithful to the provided context",
+                "Assesses the factual accuracy of the generated answer against ground truth"
+            ],
+            "Excellent (0.8-1.0)": [
+                "✅ Context contains all necessary information",
+                "✅ Answer is completely faithful to context",
+                "✅ All facts are accurate and verifiable"
+            ],
+            "Good (0.6-0.8)": [
+                "✅ Context covers most required information",
+                "✅ Answer is mostly faithful with minor deviations",
+                "✅ Most facts are accurate with few errors"
+            ],
+            "Fair (0.4-0.6)": [
+                "⚠️ Context covers some required information",
+                "⚠️ Answer has some unfaithful elements",
+                "⚠️ Some facts are accurate, others may be incorrect"
+            ],
+            "Poor (0.0-0.4)": [
+                "❌ Context lacks essential information",
+                "❌ Answer significantly deviates from context",
+                "❌ Many factual errors or hallucinations"
+            ]
+        }
+        
+        df_ragas = pd.DataFrame(ragas_data)
+        st.dataframe(df_ragas, use_container_width=True)
+        
+        # RAGAS-specific guidance
+        st.write("**🎯 RAGAS Interpretation Guidelines:**")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.success("**Context Recall ≥ 0.7**\nIndicates good retrieval coverage")
+        with col2:
+            st.success("**Faithfulness ≥ 0.8**\nShows answer stays true to context")
+        with col3:
+            st.success("**Factual Correctness ≥ 0.8**\nEnsures high accuracy")
+        
+        # RAGAS best practices
+        st.write("**💡 RAGAS Best Practices:**")
+        st.info("""
+        • **Context Recall** should be prioritized for retrieval quality assessment
+        • **Faithfulness** is crucial for preventing hallucination detection
+        • **Factual Correctness** provides the most direct quality measure
+        • Aim for all three metrics to be above 0.7 for production-ready RAG systems
+        • Monitor **Faithfulness** especially closely as it directly impacts user trust
+        """)
+        
+        # RAGAS red flags
+        st.write("**🚨 RAGAS Red Flags:**")
+        st.error("""
+        • **Context Recall < 0.5**: Retrieval system needs improvement
+        • **Faithfulness < 0.6**: High risk of hallucinations
+        • **Factual Correctness < 0.6**: Poor answer quality
+        • **Large gaps between Faithfulness and Factual Correctness**: May indicate context quality issues
+        """)
+    
+    with tab4:
         st.subheader("🎯 Overall Interpretation Guidelines")
         
         # RAG-specific guidance

@@ -125,8 +125,8 @@ class RAGEvaluationPipeline:
         rag_data = self.api_client.get_rag_data(question_text, conversation_id)
         answer = rag_data.get("answer", "")
         sources_raw = rag_data.get("sources", "")
-        sources_formatted = parse_sources_to_formatted_list(sources_raw)
-        sources_formatted = '\n'.join(sources_formatted)
+        sources_formatted_list = parse_sources_to_formatted_list(sources_raw)
+        sources_formatted = '\n'.join(sources_formatted_list)
         sources_formatted = '/\nContent: \n' + sources_formatted
             
         
@@ -160,7 +160,6 @@ class RAGEvaluationPipeline:
             "factual_correctness": 0.0,
             "pending": True  # Flag to indicate RAGAS evaluation is pending
         }
-        
         # Compile comprehensive results
         automated_result = {
             "question_text": question_text,
@@ -169,6 +168,7 @@ class RAGEvaluationPipeline:
             "answer": answer,
             "sources": sources_formatted,
             "sources_raw": sources_raw,
+            "sources_formatted_list": sources_formatted_list,
             "question_similarity": question_similarity,
             "answer_similarity_metrics": answer_similarity_metrics,
             "sources_similarity_metrics": sources_similarity_metrics,

@@ -139,11 +139,11 @@ def ragas_evaluate(questions: List[str], answers: List[str], expected_answers: L
     """
     dataset = []
 
-    for question, answer, expected_answer, source in zip(questions, answers, expected_answers, sources):
+    for question, answer, expected_answer in zip(questions, answers, expected_answers):
         dataset.append(
             {
                 "user_input": question,
-                "retrieved_contexts": [source],
+                "retrieved_contexts": sources,
                 "response": answer,
                 "reference": expected_answer
             }
