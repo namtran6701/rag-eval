@@ -144,23 +144,13 @@ class RAGEvaluationPipeline:
                 "similarity": sample_sim["average_similarity"]
             })
         
-        # Add RAGAS evaluation
-        try:
-            #TODO: THIS THING SHOULD BE EXECUTE OVER ALL THE QUESTIONS IN THE BATCH AFTER ALL THE RESPONSES ARE GENERATED
-            ragas_result = self.ragas_evaluate([question_text], [answer], [expected_answer], [sources])
-            ragas_metrics = {
-                "context_recall": ragas_result.scores[0].get('context_recall', 0.0),
-                "faithfulness": ragas_result.scores[0].get('faithfulness', 0.0),
-                "factual_correctness": ragas_result.scores[0].get('factual_correctness', 0.0),
-            }
-        except Exception as e:
-            print(f"Warning: RAGAS evaluation failed: {e}")
-            ragas_metrics = {
-                "context_recall": 0.0,
-                "faithfulness": 0.0,
-                "factual_correctness": 0.0,
-                "error": str(e)
-            }
+        # RAGAS evaluation will be done at batch level for efficiency
+        ragas_metrics = {
+            "context_recall": 0.0,
+            "faithfulness": 0.0,
+            "factual_correctness": 0.0,
+            "pending": True  # Flag to indicate RAGAS evaluation is pending
+        }
         
         # Compile comprehensive results
         automated_result = {

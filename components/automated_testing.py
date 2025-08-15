@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from typing import Dict, Any, List
 from components.utils import get_batch_data
+from indicators import ragas_evaluate
 
 def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
     """
@@ -82,7 +83,50 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
         
     if st.button("Test single question (first)"):
         if len(questions) > 0:
-            test_result = pipeline.automated_evaluate_question(questions[0], answers[0], sources[0])
+            with st.spinner("Testing single question..."):
+                # Get individual test result (without RAGAS)
+                test_result = pipeline.automated_evaluate_question(questions[0], answers[0], sources[0])
+                
+                # Perform RAGAS evaluation for the single question
+                if "error" not in test_result:
+                    st.info("🎯 Running RAGAS evaluation...")
+                    try:
+                        # Run batch RAGAS evaluation with single question
+                        ragas_result = ragas_evaluate(
+                            [test_result['question_text']], 
+                            [test_result['answer']], 
+                            [test_result['expected_answer']], 
+                            [test_result['sources']]
+                        )
+                        
+                        # Map RAGAS results back to the test result
+                        if len(ragas_result.scores) > 0:
+                            ragas_score = ragas_result.scores[0]
+                            test_result['ragas_metrics'] = {
+                                "context_recall": ragas_score.get('context_recall', 0.0),
+                                "faithfulness": ragas_score.get('faithfulness', 0.0),
+                                "factual_correctness": ragas_score.get('factual_correctness', 0.0),
+                                "pending": False  # Mark as completed
+                            }
+                        else:
+                            test_result['ragas_metrics'] = {
+                                "context_recall": 0.0,
+                                "faithfulness": 0.0,
+                                "factual_correctness": 0.0,
+                                "error": "No RAGAS scores returned"
+                            }
+                        
+                        st.success("✅ RAGAS evaluation completed!")
+                        
+                    except Exception as e:
+                        st.warning(f"⚠️ RAGAS evaluation failed: {str(e)}")
+                        test_result['ragas_metrics'] = {
+                            "context_recall": 0.0,
+                            "faithfulness": 0.0,
+                            "factual_correctness": 0.0,
+                            "error": str(e)
+                        }
+            
             display_automated_test_results([test_result])
         
     
@@ -154,6 +198,53 @@ def display_automated_testing_interface(pipeline) -> List[Dict[str, Any]]:
                     # Clear progress indicators
                     progress_bar.empty()
                     status_text.empty()
+                
+                # Perform batch RAGAS evaluation for successful tests
+                successful_results = [r for r in results if "error" not in r]
+                if successful_results:
+                    st.info("🎯 Running batch RAGAS evaluation...")
+                    with st.spinner("Evaluating with RAGAS metrics..."):
+                        try:
+                            # Prepare data for RAGAS evaluation
+                            ragas_questions = [r['question_text'] for r in successful_results]
+                            ragas_answers = [r['answer'] for r in successful_results]
+                            ragas_expected_answers = [r['expected_answer'] for r in successful_results]
+                            ragas_sources = [r['sources'] for r in successful_results]
+                            
+                            # Run batch RAGAS evaluation
+                            ragas_result = ragas_evaluate(ragas_questions, ragas_answers, ragas_expected_answers, ragas_sources)
+                            
+                            # Map RAGAS results back to individual test results
+                            for i, result in enumerate(successful_results):
+                                if i < len(ragas_result.scores):
+                                    ragas_score = ragas_result.scores[i]
+                                    result['ragas_metrics'] = {
+                                        "context_recall": ragas_score.get('context_recall', 0.0),
+                                        "faithfulness": ragas_score.get('faithfulness', 0.0),
+                                        "factual_correctness": ragas_score.get('factual_correctness', 0.0),
+                                        "pending": False  # Mark as completed
+                                    }
+                                else:
+                                    # Fallback if RAGAS results are shorter than expected
+                                    result['ragas_metrics'] = {
+                                        "context_recall": 0.0,
+                                        "faithfulness": 0.0,
+                                        "factual_correctness": 0.0,
+                                        "error": "RAGAS result index out of range"
+                                    }
+                            
+                            st.success("✅ RAGAS evaluation completed successfully!")
+                            
+                        except Exception as e:
+                            st.warning(f"⚠️ RAGAS evaluation failed: {str(e)}")
+                            # Set error state for all successful results
+                            for result in successful_results:
+                                result['ragas_metrics'] = {
+                                    "context_recall": 0.0,
+                                    "faithfulness": 0.0,
+                                    "factual_correctness": 0.0,
+                                    "error": str(e)
+                                }
                 
                 # Calculate execution time
                 end_time = time.time()
@@ -232,14 +323,32 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             st.metric("Avg Similarity", "N/A")
     with col5:
         if successful_tests:
-            avg_faithfulness = np.mean([r.get('ragas_metrics', {}).get('faithfulness', 0.0) for r in successful_tests])
-            st.metric("Avg Faithfulness", f"{avg_faithfulness:.3f}")
+            # Only calculate average for completed RAGAS evaluations
+            completed_ragas = [r for r in successful_tests if not r.get('ragas_metrics', {}).get('pending', False) and 'error' not in r.get('ragas_metrics', {})]
+            if completed_ragas:
+                avg_faithfulness = np.mean([r.get('ragas_metrics', {}).get('faithfulness', 0.0) for r in completed_ragas])
+                st.metric("Avg Faithfulness", f"{avg_faithfulness:.3f}")
+            else:
+                pending_count = len([r for r in successful_tests if r.get('ragas_metrics', {}).get('pending', False)])
+                if pending_count > 0:
+                    st.metric("Avg Faithfulness", f"Pending ({pending_count})")
+                else:
+                    st.metric("Avg Faithfulness", "N/A")
         else:
             st.metric("Avg Faithfulness", "N/A")
     with col6:
         if successful_tests:
-            avg_factual = np.mean([r.get('ragas_metrics', {}).get('factual_correctness', 0.0) for r in successful_tests])
-            st.metric("Avg Factual Correctness", f"{avg_factual:.3f}")
+            # Only calculate average for completed RAGAS evaluations
+            completed_ragas = [r for r in successful_tests if not r.get('ragas_metrics', {}).get('pending', False) and 'error' not in r.get('ragas_metrics', {})]
+            if completed_ragas:
+                avg_factual = np.mean([r.get('ragas_metrics', {}).get('factual_correctness', 0.0) for r in completed_ragas])
+                st.metric("Avg Factual Correctness", f"{avg_factual:.3f}")
+            else:
+                pending_count = len([r for r in successful_tests if r.get('ragas_metrics', {}).get('pending', False)])
+                if pending_count > 0:
+                    st.metric("Avg Factual Correctness", f"Pending ({pending_count})")
+                else:
+                    st.metric("Avg Factual Correctness", "N/A")
         else:
             st.metric("Avg Factual Correctness", "N/A")
     
@@ -252,6 +361,21 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             overview_data = []
             for i, result in enumerate(successful_tests):
                 ragas_metrics = result.get('ragas_metrics', {})
+                
+                # Handle RAGAS metrics display
+                if ragas_metrics.get('pending', False):
+                    context_recall = "Pending"
+                    faithfulness = "Pending"
+                    factual_correctness = "Pending"
+                elif 'error' in ragas_metrics:
+                    context_recall = "Error"
+                    faithfulness = "Error"
+                    factual_correctness = "Error"
+                else:
+                    context_recall = f"{ragas_metrics.get('context_recall', 0.0):.3f}"
+                    faithfulness = f"{ragas_metrics.get('faithfulness', 0.0):.3f}"
+                    factual_correctness = f"{ragas_metrics.get('factual_correctness', 0.0):.3f}"
+                
                 overview_data.append({
                     "Question #": i + 1,
                     "Avg Similarity": f"{result['answer_similarity_metrics']['average_similarity']:.3f}",
@@ -260,9 +384,9 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     "Cosine Sim": f"{result['answer_similarity_metrics']['cosine_similarity']:.3f}",
                     "Sequence Sim": f"{result['answer_similarity_metrics']['sequence_similarity']:.3f}",
                     "Word Overlap": f"{result['answer_similarity_metrics']['word_overlap']:.3f}",
-                    "Context Recall": f"{ragas_metrics.get('context_recall', 0.0):.3f}",
-                    "Faithfulness": f"{ragas_metrics.get('faithfulness', 0.0):.3f}",
-                    "Factual Correctness": f"{ragas_metrics.get('factual_correctness', 0.0):.3f}"
+                    "Context Recall": context_recall,
+                    "Faithfulness": faithfulness,
+                    "Factual Correctness": factual_correctness
                 })
             
             df_overview = pd.DataFrame(overview_data)
@@ -365,7 +489,7 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
             ragas_data = []
             for i, result in enumerate(successful_tests):
                 ragas_metrics = result.get('ragas_metrics', {})
-                if 'error' not in ragas_metrics:
+                if 'error' not in ragas_metrics and not ragas_metrics.get('pending', False):
                     ragas_data.append({
                         "Question": i + 1,
                         "Context Recall": ragas_metrics.get('context_recall', 0.0),
@@ -414,8 +538,8 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     st.plotly_chart(fig_factual, use_container_width=True)
                 
                 # RAGAS vs Similarity correlation
-                similarity_scores = [r['answer_similarity_metrics']['average_similarity'] for r in successful_tests if 'error' not in r.get('ragas_metrics', {})]
-                faithfulness_scores = [r.get('ragas_metrics', {}).get('faithfulness', 0.0) for r in successful_tests if 'error' not in r.get('ragas_metrics', {})]
+                similarity_scores = [r['answer_similarity_metrics']['average_similarity'] for r in successful_tests if 'error' not in r.get('ragas_metrics', {}) and not r.get('ragas_metrics', {}).get('pending', False)]
+                faithfulness_scores = [r.get('ragas_metrics', {}).get('faithfulness', 0.0) for r in successful_tests if 'error' not in r.get('ragas_metrics', {}) and not r.get('ragas_metrics', {}).get('pending', False)]
                 
                 if len(similarity_scores) == len(faithfulness_scores) and len(similarity_scores) > 0:
                     correlation_data = pd.DataFrame({
@@ -438,14 +562,20 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                     st.info(f"📊 Correlation between Similarity and Faithfulness: {correlation:.3f}")
             
             else:
-                st.warning("⚠️ No valid RAGAS metrics found. This might indicate RAGAS evaluation errors.")
+                # Check if RAGAS evaluations are pending or have errors
+                pending_ragas = [r for r in successful_tests if r.get('ragas_metrics', {}).get('pending', False)]
+                error_ragas = [r.get('ragas_metrics', {}).get('error') for r in successful_tests if 'error' in r.get('ragas_metrics', {})]
                 
-                # Show RAGAS errors if any
-                ragas_errors = [r.get('ragas_metrics', {}).get('error') for r in successful_tests if 'error' in r.get('ragas_metrics', {})]
-                if ragas_errors:
+                if pending_ragas:
+                    st.info(f"⏳ {len(pending_ragas)} RAGAS evaluations are pending. Run the automated testing to complete them.")
+                elif error_ragas:
+                    st.warning("⚠️ RAGAS evaluation errors occurred.")
                     st.error("RAGAS Evaluation Errors:")
-                    for i, error in enumerate(ragas_errors):
-                        st.write(f"Question {i+1}: {error}")
+                    for i, error in enumerate(error_ragas):
+                        if error:
+                            st.write(f"Question {i+1}: {error}")
+                else:
+                    st.warning("⚠️ No valid RAGAS metrics found.")
     
     with tab5:
         # Compact detailed individual results
@@ -495,7 +625,9 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                 with metrics_col3:
                     st.markdown("**🎯 RAGAS**")
                     ragas_metrics = result.get('ragas_metrics', {})
-                    if 'error' in ragas_metrics:
+                    if ragas_metrics.get('pending', False):
+                        st.write("⏳ Pending evaluation...")
+                    elif 'error' in ragas_metrics:
                         st.write(f"❌ Error: {ragas_metrics['error'][:30]}...")
                     else:
                         st.write(f"• Context Recall: {ragas_metrics.get('context_recall', 0.0):.3f}")
@@ -564,12 +696,20 @@ def display_automated_test_results(results: List[Dict[str, Any]]):
                 
                 with metrics_row5:
                     ragas_metrics = result.get('ragas_metrics', {})
-                    faithfulness = ragas_metrics.get('faithfulness', 0.0) if 'error' not in ragas_metrics else 0.0
-                    st.metric("Faithfulness", f"{faithfulness:.3f}")
+                    if ragas_metrics.get('pending', False):
+                        faithfulness = "Pending"
+                    else:
+                        faithfulness = ragas_metrics.get('faithfulness', 0.0) if 'error' not in ragas_metrics else 0.0
+                        faithfulness = f"{faithfulness:.3f}" if isinstance(faithfulness, (int, float)) else str(faithfulness)
+                    st.metric("Faithfulness", faithfulness)
                 
                 with metrics_row6:
-                    factual_correctness = ragas_metrics.get('factual_correctness', 0.0) if 'error' not in ragas_metrics else 0.0
-                    st.metric("Factual Correctness", f"{factual_correctness:.3f}")
+                    if ragas_metrics.get('pending', False):
+                        factual_correctness = "Pending"
+                    else:
+                        factual_correctness = ragas_metrics.get('factual_correctness', 0.0) if 'error' not in ragas_metrics else 0.0
+                        factual_correctness = f"{factual_correctness:.3f}" if isinstance(factual_correctness, (int, float)) else str(factual_correctness)
+                    st.metric("Factual Correctness", factual_correctness)
                 
                 st.markdown("---")
                 
