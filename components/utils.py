@@ -6,6 +6,158 @@ This component contains shared utility functions and constants used across compo
 
 import streamlit as st
 import pandas as pd
+import json
+import ast
+
+
+def parse_sources_to_formatted_list(sources_string: str) -> list:
+    """
+    Parse sources string and transform it into a formatted list of documents
+    
+    Args:
+        sources_string: String representation of sources dictionary containing subqueries
+        
+    Returns:
+        List of formatted strings with content, source, and separator line
+    """
+    if not sources_string or sources_string.strip() == "":
+        return []
+    
+    # Clean the input string to handle common external service issues
+    cleaned_string = sources_string.strip()
+    
+    # Remove common prefixes that external services might add
+    prefixes_to_remove = [
+        "/ Content:",
+        "Content:",
+        "Sources:",
+        "Data:",
+        "Response:"
+    ]
+    
+    for prefix in prefixes_to_remove:
+        if cleaned_string.startswith(prefix):
+            cleaned_string = cleaned_string[len(prefix):].strip()
+    
+    st.write(f"Original string: {sources_string[:100]}...")
+    st.write(f"Cleaned string: {cleaned_string[:100]}...")
+    
+    try:
+        # Strategy 1: Try to parse as JSON first
+        try:
+            sources_dict = json.loads(cleaned_string)
+            st.write("Successfully parsed as JSON")
+        except json.JSONDecodeError as json_error:
+            st.write(f"JSON parsing failed: {json_error}")
+            
+            # Strategy 2: Try to evaluate as Python literal
+            try:
+                sources_dict = ast.literal_eval(cleaned_string)
+                st.write("Successfully parsed as Python literal")
+            except (ValueError, SyntaxError) as ast_error:
+                st.write(f"Python literal parsing failed: {ast_error}")
+                
+                # Strategy 3: Try to fix common JSON issues
+                try:
+                    # Replace single quotes with double quotes for JSON compatibility
+                    json_fixed = cleaned_string.replace("'", '"')
+                    
+                    # Handle trailing commas
+                    json_fixed = json_fixed.replace(',}', '}').replace(',]', ']')
+                    
+                    # Handle incomplete JSON by finding the last complete object
+                    if json_fixed.count('{') != json_fixed.count('}'):
+                        # Find the last complete closing brace
+                        last_complete_brace = json_fixed.rfind('}')
+                        if last_complete_brace > 0:
+                            json_fixed = json_fixed[:last_complete_brace + 1]
+                    
+                    st.write(f"Attempting to parse fixed JSON: {json_fixed[:100]}...")
+                    sources_dict = json.loads(json_fixed)
+                    st.write("Successfully parsed fixed JSON")
+                    
+                except json.JSONDecodeError as fixed_error:
+                    st.write(f"Fixed JSON parsing failed: {fixed_error}")
+                    
+                    # Strategy 4: Try to extract partial data using regex
+                    import re
+                    
+                    # Look for document patterns in the string
+                    doc_pattern = r"'content':\s*'([^']*)',\s*'source':\s*'([^']*)'"
+                    matches = re.findall(doc_pattern, cleaned_string)
+                    
+                    if matches:
+                        st.write(f"Found {len(matches)} documents using regex")
+                        formatted_documents = []
+                        for content, source in matches:
+                            formatted_doc = f"{content}\nSource: {source}\n{'=' * 30}"
+                            formatted_documents.append(formatted_doc)
+                        return formatted_documents
+                    else:
+                        # Strategy 5: Try to extract any content and source pairs we can find
+                        st.write("Attempting to extract partial data...")
+                        
+                        # Look for any content patterns
+                        content_pattern = r"'content':\s*'([^']*)'"
+                        source_pattern = r"'source':\s*'([^']*)'"
+                        
+                        content_matches = re.findall(content_pattern, cleaned_string)
+                        source_matches = re.findall(source_pattern, cleaned_string)
+                        
+                        if content_matches and source_matches:
+                            st.write(f"Found {len(content_matches)} content matches and {len(source_matches)} source matches")
+                            
+                            # Pair them up (assuming they're in order)
+                            formatted_documents = []
+                            for i in range(min(len(content_matches), len(source_matches))):
+                                content = content_matches[i]
+                                source = source_matches[i]
+                                formatted_doc = f"{content}\nSource: {source}\n{'=' * 30}\n"
+                                formatted_documents.append(formatted_doc)
+                            
+                            if formatted_documents:
+                                return formatted_documents
+                        
+                        # Strategy 6: Last resort - try to extract any readable content
+                        st.write("Attempting to extract any readable content...")
+                        
+                        # Look for any text that looks like content
+                        text_pattern = r"'([^']{50,})'"  # Any quoted string with at least 50 characters
+                        text_matches = re.findall(text_pattern, cleaned_string)
+                        
+                        if text_matches:
+                            st.write(f"Found {len(text_matches)} potential text matches")
+                            formatted_documents = []
+                            for i, text in enumerate(text_matches[:5]):  # Limit to first 5
+                                formatted_doc = f"{text}\nSource: Unknown\n{'=' * 30}"
+                                formatted_documents.append(formatted_doc)
+                            return formatted_documents
+                        
+                        raise ValueError(f"Could not parse sources string using any method: {cleaned_string[:200]}...")
+        
+        formatted_documents = []
+        
+        # Iterate through each subquery in the sources dictionary
+        for subquery_key, subquery_data in sources_dict.items():
+            if isinstance(subquery_data, dict) and 'documents' in subquery_data:
+                documents = subquery_data['documents']
+                
+                # Process each document in the subquery
+                for doc in documents:
+                    if isinstance(doc, dict) and 'content' in doc and 'source' in doc:
+                        content = doc['content'].strip()
+                        source = doc['source'].strip()
+                        
+                        # Format the document as requested
+                        formatted_doc = f"{content}\nSource: {source}\n{'=' * 30}"
+                        formatted_documents.append(formatted_doc)
+        
+        return formatted_documents
+        
+    except Exception as e:
+        # If parsing fails completely, return an error message
+        st.write(f"Final parsing error: {str(e)}")
+        return [f"Error parsing sources: {str(e)}\n{'=' * 30}"]
 
 
 def get_score_color(score: any) -> str:
@@ -286,3 +438,54 @@ def display_indicator_interpretation_guide():
             - Poor alignment
             - Significant differences
             """)
+
+
+if __name__ == "__main__":
+    """
+    Test the parse_sources_to_formatted_list function
+    """
+    import os
+    
+    # Path to the test file - test both malformed and well-formed data
+    test_files = ["test_malformed_sources.txt", "test_sources_example.txt"]
+    
+    for test_file_path in test_files:
+        print(f"\n{'='*60}")
+        print(f"Testing with file: {test_file_path}")
+        print(f"{'='*60}")
+        
+        try:
+            # Check if test file exists
+            if not os.path.exists(test_file_path):
+                print(f"Test file {test_file_path} not found. Skipping...")
+                continue
+            else:
+                # Read the test file
+                with open(test_file_path, 'r') as file:
+                    test_sources_string = file.read().strip()
+            
+            print("Testing parse_sources_to_formatted_list function...")
+            print(f"Input string: {test_sources_string[:100]}...")
+            print("-" * 50)
+            
+            # Test the function
+            result = parse_sources_to_formatted_list(test_sources_string)
+            
+            print(f"Function returned {len(result)} formatted documents:")
+            print("-" * 50)
+            
+            for i, doc in enumerate(result, 1):
+                print(f"Document {i}:")
+                print(doc)
+                print()
+            
+            print("Test completed successfully!")
+            
+        except Exception as e:
+            print(f"Error during testing: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    print(f"\n{'='*60}")
+    print("All tests completed!")
+    print(f"{'='*60}")

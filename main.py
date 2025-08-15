@@ -14,6 +14,7 @@ from rag_api_client import RAGApiClient
 from rag_evaluator import RAGEvaluator
 from indicators import calculate_text_similarity, calculate_length_comparison, extract_text_samples, ragas_evaluate
 from config import Config
+from components.utils import parse_sources_to_formatted_list
 import streamlit as st
 
 class RAGEvaluationPipeline:
@@ -53,20 +54,24 @@ class RAGEvaluationPipeline:
         
         # Step 2: Extract components
         answer = rag_data.get("answer", "")
-        sources = rag_data.get("sources", "")
+        sources_raw = rag_data.get("sources", "")
         
-        # Step 3: Evaluate using the original question
+        # Step 2.1: Parse and format sources
+        sources_formatted = parse_sources_to_formatted_list(sources_raw)
+        
+        # Step 3: Evaluate using the original question (use raw sources for evaluation)
         evaluation_results = self.evaluator.evaluate_rag_response(
             query=question,
             response=answer,
-            context=sources
+            context=sources_raw
         )
         
         # Step 4: Combine results
         return {
             "question": question,
             "answer": answer,
-            "sources": sources,
+            "sources": sources_raw,  # Keep raw sources for compatibility
+            "sources_formatted": sources_formatted,  # Add formatted sources
             "evaluation": evaluation_results
         }
     
@@ -119,18 +124,22 @@ class RAGEvaluationPipeline:
         # Step 1: Get RAG response
         rag_data = self.api_client.get_rag_data(question_text, conversation_id)
         answer = rag_data.get("answer", "")
-        sources = rag_data.get("sources", "")
+        sources_raw = rag_data.get("sources", "")
+        sources_formatted = parse_sources_to_formatted_list(sources_raw)
+        sources_formatted = '/ Content: '.join(sources_formatted)
+        sources_formatted = sources_formatted.replace("Content", '\n Content: ')
+            
         
         # Compare the provided question with the batch question
         question_similarity = calculate_text_similarity(answer, expected_answer)
         
         # Perform similarity comparison between answers
         answer_similarity_metrics = calculate_text_similarity(answer, expected_answer)
-        sources_similarity_metrics = calculate_text_similarity(sources, expected_sources)
+        sources_similarity_metrics = calculate_text_similarity(sources_raw, expected_sources)
         
         # Perform length comparison
         length_metrics = calculate_length_comparison(answer, expected_answer)
-        sources_length_metrics = calculate_length_comparison(sources, expected_sources)
+        sources_length_metrics = calculate_length_comparison(sources_raw, expected_sources)
         
         # Extract and compare samples
         stored_samples = extract_text_samples(answer)
@@ -158,7 +167,8 @@ class RAGEvaluationPipeline:
             "expected_answer": expected_answer,
             "expected_sources": expected_sources,
             "answer": answer,
-            "sources": sources,
+            "sources": sources_formatted,
+            "sources_raw": sources_raw,
             "question_similarity": question_similarity,
             "answer_similarity_metrics": answer_similarity_metrics,
             "sources_similarity_metrics": sources_similarity_metrics,
